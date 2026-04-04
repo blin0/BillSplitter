@@ -1,0 +1,2 @@
+# BillSplitter
+Split expenses fairly
