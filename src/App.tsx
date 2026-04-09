@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Receipt, Sun, Moon } from 'lucide-react';
+import { Receipt, Sun, Moon, LogOut, CloudOff } from 'lucide-react';
+import { useQuery, useMutation, useConvexAuth } from 'convex/react';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { api } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
+import AuthScreen from './components/AuthScreen';
 import type { Expense, Participant } from './types';
 import {
   computeBalances,
@@ -17,6 +22,7 @@ import SettlementAdvice from './components/SettlementAdvice';
 import SelectiveSummary from './components/SelectiveSummary';
 import CurrencyDropdown from './components/CurrencyDropdown';
 import OfflineBanner from './components/OfflineBanner';
+import { cn } from './lib/cn';
 
 function makeId() {
   return Math.random().toString(36).slice(2);
@@ -36,14 +42,8 @@ function useTheme() {
   function toggle() {
     setDark(prev => {
       const next = !prev;
-      if (next) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      try {
-        localStorage.setItem('theme', next ? 'dark' : 'light');
-      } catch (_) { /* blocked in some private-browsing contexts */ }
+      document.documentElement.classList.toggle('dark', next);
+      try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch (_) {}
       return next;
     });
   }
@@ -51,161 +51,251 @@ function useTheme() {
   return { dark, mounted, toggle };
 }
 
-// ─── localStorage helpers ─────────────────────────────────────────────────────
+// ─── Convex → frontend type adapters ─────────────────────────────────────────
 
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+type ConvexParticipant = { _id: Id<"participants">; _creationTime: number; name: string };
+type ConvexExpense     = Omit<Expense, 'id' | 'paidBy' | 'involvedParticipants' | 'splits'> & {
+  _id:                  Id<"expenses">;
+  _creationTime:        number;
+  paidBy:               Id<"participants">;
+  involvedParticipants: Id<"participants">[];
+  splits: {
+    participantId: Id<"participants">;
+    share:         number;
+    paidAmount:    number;
+    isSettled:     boolean;
+  }[];
+};
+
+function toParticipant(doc: ConvexParticipant): Participant {
+  return { id: doc._id as string, name: doc.name };
+}
+
+function toExpense(doc: ConvexExpense): Expense {
+  return {
+    id:                   doc._id as string,
+    description:          doc.description,
+    totalAmount:          doc.totalAmount,
+    sourceAmount:         doc.sourceAmount,
+    sourceCurrency:       doc.sourceCurrency,
+    lockedRate:           doc.lockedRate,
+    paidBy:               doc.paidBy as string,
+    splitType:            doc.splitType,
+    involvedParticipants: doc.involvedParticipants as string[],
+    splits:               doc.splits.map(s => ({
+      ...s,
+      participantId: s.participantId as string,
+    })),
+    isHighlighted:   doc.isHighlighted,
+    taxPercent:      doc.taxPercent,
+    tipSourceAmount: doc.tipSourceAmount,
+  };
+}
+
+// ─── Guest banner ─────────────────────────────────────────────────────────────
+
+function GuestBanner({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="bg-violet-50 dark:bg-violet-950/40 border-b border-violet-200 dark:border-violet-800/50 px-4 py-2 flex items-center gap-3">
+      <CloudOff size={14} className="text-violet-500 dark:text-violet-400 shrink-0" />
+      <p className="flex-1 text-xs text-violet-700 dark:text-violet-300">
+        <span className="font-semibold">Guest Mode</span> — your progress is not saved.
+      </p>
+      <button
+        type="button"
+        onClick={onSignIn}
+        className="shrink-0 text-xs font-semibold px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-all hover:scale-105 active:scale-95"
+      >
+        Sign In to Save
+      </button>
+    </div>
+  );
+}
+
+// ─── Auth modal ───────────────────────────────────────────────────────────────
+
+function AuthModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-transparent backdrop-blur-lg"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-sm flex items-center justify-center">
+        <AuthScreen onClose={onClose} modal />
+      </div>
+    </div>
+  );
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 function AppInner() {
-  const [participants, setParticipants] = useState<Participant[]>(() =>
-    loadJson<Participant[]>('billsplitter_participants', [])
-  );
-  const [expenses, setExpenses] = useState<Expense[]>(() =>
-    loadJson<Expense[]>('billsplitter_expenses', [])
-  );
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const { dark, mounted, toggle } = useTheme();
+  const { signOut } = useAuthActions();
+  const [showAuth, setShowAuth] = useState(false);
 
-  // Persist on every change
-  useEffect(() => {
-    try { localStorage.setItem('billsplitter_participants', JSON.stringify(participants)); } catch (_) {}
-  }, [participants]);
+  // ── Convex data (returns [] when unauthenticated — backend guards it) ──────
+  const rawParticipants = useQuery(api.participants.list);
+  const rawExpenses     = useQuery(api.expenses.list);
+  const convexParticipants: Participant[] = (rawParticipants ?? []).map(toParticipant);
+  const convexExpenses:     Expense[]     = (rawExpenses     ?? []).map(toExpense);
+  const convexLoading = isAuthenticated && (rawParticipants === undefined || rawExpenses === undefined);
 
-  useEffect(() => {
-    try { localStorage.setItem('billsplitter_expenses', JSON.stringify(expenses)); } catch (_) {}
-  }, [expenses]);
+  // ── Local guest state ─────────────────────────────────────────────────────
+  const [localParticipants, setLocalParticipants] = useState<Participant[]>([]);
+  const [localExpenses, setLocalExpenses]         = useState<Expense[]>([]);
+
+  // ── Active data — Convex when authenticated, local when guest ─────────────
+  const participants = isAuthenticated ? convexParticipants : localParticipants;
+  const expenses     = isAuthenticated ? convexExpenses     : localExpenses;
+
+  // ── Convex mutations ───────────────────────────────────────────────────────
+  const addParticipantMutation     = useMutation(api.participants.add);
+  const removeParticipantMutation  = useMutation(api.participants.remove);
+  const addExpenseMutation         = useMutation(api.expenses.add);
+  const removeExpenseMutation      = useMutation(api.expenses.remove);
+  const toggleHighlightMutation    = useMutation(api.expenses.toggleHighlight);
+  const highlightUnsettledMutation = useMutation(api.expenses.highlightUnsettled);
+  const applyPaymentMutation       = useMutation(api.expenses.applyPayment);
+
+  // ── Derived data ───────────────────────────────────────────────────────────
+  const balances      = computeBalances(participants, expenses);
+  const settlements   = simplifyDebts(balances);
+  const total         = totalSpending(expenses);
+  const highlighted   = expenses.filter(e => e.isHighlighted);
+  const selectedDebts = computeSelectedDebts(highlighted);
 
   // ── Participant handlers ───────────────────────────────────────────────────
   function addParticipant(name: string) {
-    setParticipants(prev => [...prev, { id: makeId(), name }]);
+    if (isAuthenticated) {
+      void addParticipantMutation({ name });
+    } else {
+      setLocalParticipants(prev => [...prev, { id: makeId(), name }]);
+    }
   }
 
   function removeParticipant(id: string) {
-    // Safety guard: round2 prevents tiny floating-point residuals from blocking valid deletions
     if (Math.abs(round2(balances[id] ?? 0)) > 0.01) return;
-    setParticipants(prev => prev.filter(p => p.id !== id));
-    setExpenses(prev => prev.filter(e => e.paidBy !== id));
+    if (isAuthenticated) {
+      void removeParticipantMutation({ id: id as Id<"participants"> });
+    } else {
+      setLocalParticipants(prev => prev.filter(p => p.id !== id));
+      setLocalExpenses(prev => prev.filter(e => e.paidBy !== id));
+    }
   }
 
   // ── Expense handlers ───────────────────────────────────────────────────────
   function addExpense(expense: Expense) {
-    setExpenses(prev => [...prev, expense]);
+    if (isAuthenticated) {
+      void addExpenseMutation({
+        description:          expense.description,
+        totalAmount:          expense.totalAmount,
+        sourceAmount:         expense.sourceAmount,
+        sourceCurrency:       expense.sourceCurrency,
+        lockedRate:           expense.lockedRate,
+        paidBy:               expense.paidBy              as Id<"participants">,
+        splitType:            expense.splitType,
+        involvedParticipants: expense.involvedParticipants as Id<"participants">[],
+        splits:               expense.splits.map(s => ({
+          ...s,
+          participantId: s.participantId as Id<"participants">,
+        })),
+        taxPercent:           expense.taxPercent,
+        tipSourceAmount:      expense.tipSourceAmount,
+      });
+    } else {
+      setLocalExpenses(prev => [...prev, { ...expense, id: makeId() }]);
+    }
   }
 
   function removeExpense(id: string) {
-    setExpenses(prev => prev.filter(e => e.id !== id));
+    if (isAuthenticated) {
+      void removeExpenseMutation({ id: id as Id<"expenses"> });
+    } else {
+      setLocalExpenses(prev => prev.filter(e => e.id !== id));
+    }
   }
 
   function toggleHighlight(id: string) {
-    setExpenses(prev =>
-      prev.map(e => e.id === id ? { ...e, isHighlighted: !e.isHighlighted } : e)
-    );
+    if (isAuthenticated) {
+      void toggleHighlightMutation({ id: id as Id<"expenses"> });
+    } else {
+      setLocalExpenses(prev =>
+        prev.map(e => e.id === id ? { ...e, isHighlighted: !e.isHighlighted } : e)
+      );
+    }
   }
 
   function selectAllUnsettled() {
-    setExpenses(prev =>
-      prev.map(e => ({
-        ...e,
-        isHighlighted: e.splits.some(s => !s.isSettled),
-      }))
-    );
+    if (isAuthenticated) {
+      void highlightUnsettledMutation({});
+    } else {
+      setLocalExpenses(prev =>
+        prev.map(e => ({ ...e, isHighlighted: e.splits.some(s => !s.isSettled) }))
+      );
+    }
   }
 
-  /**
-   * Pure helper: distribute `paymentAmount` from `from` to `to` across expenses.
-   * When `highlightedOnly` is true only highlighted expenses are touched (selective panel).
-   * When false, all expenses are eligible (global settlement).
-   */
-  function applyPayment(
-    expenses: Expense[],
-    from: string,
-    to: string,
-    paymentAmount: number,
-    highlightedOnly: boolean,
-  ): Expense[] {
-    let remaining = round2(paymentAmount);
-
-    if (highlightedOnly) {
-      // ── Selective path: "smallest outstanding first" greedy strategy ──────
-      // Collect references to all eligible splits across highlighted expenses,
-      // sorted ascending by outstanding amount so partial payments clear the
-      // maximum number of individual line items.
-      type SplitRef = { expenseId: string; splitIdx: number; owed: number };
-      const eligible: SplitRef[] = [];
-      for (const expense of expenses) {
-        if (!expense.isHighlighted || expense.paidBy !== to) continue;
-        expense.splits.forEach((split, idx) => {
-          if (split.participantId !== from || split.isSettled) return;
-          const owed = round2(split.share - split.paidAmount);
-          if (owed >= 0.01) eligible.push({ expenseId: expense.id, splitIdx: idx, owed });
+  function applyLocalPayment(
+    from: string, to: string, amount: number, highlightedOnly: boolean
+  ) {
+    setLocalExpenses(prev => {
+      let remaining = round2(amount);
+      const eligible: { expenseId: string; splitIdx: number; owed: number }[] = [];
+      for (const e of prev) {
+        if (highlightedOnly && !e.isHighlighted) continue;
+        if (e.paidBy !== to) continue;
+        e.splits.forEach((s, i) => {
+          const owed = round2(s.share - s.paidAmount);
+          if (s.participantId === from && owed > 0.01)
+            eligible.push({ expenseId: e.id, splitIdx: i, owed });
         });
       }
-      // Sort ascending — smallest debt first
       eligible.sort((a, b) => a.owed - b.owed);
-
-      // Build a mutable map of updated splits keyed by expenseId
       const updated: Record<string, Expense['splits']> = {};
       for (const { expenseId, splitIdx } of eligible) {
         if (remaining < 0.01) break;
-        const expense = expenses.find(e => e.id === expenseId)!;
-        if (!updated[expenseId]) updated[expenseId] = expense.splits.map(s => ({ ...s }));
-        const split    = updated[expenseId][splitIdx];
-        const owed     = round2(split.share - split.paidAmount);
-        const applying = round2(Math.min(remaining, owed));
-        remaining      = round2(remaining - applying);
-        const newPaid  = round2(split.paidAmount + applying);
-        updated[expenseId][splitIdx] = {
-          ...split,
-          paidAmount: newPaid,
-          isSettled: newPaid >= split.share - 0.005,
-        };
+        const exp = prev.find(e => e.id === expenseId)!;
+        if (!updated[expenseId]) updated[expenseId] = exp.splits.map(s => ({ ...s }));
+        const split   = updated[expenseId][splitIdx];
+        const owed    = round2(split.share - split.paidAmount);
+        const paying  = round2(Math.min(remaining, owed));
+        remaining     = round2(remaining - paying);
+        const newPaid = round2(split.paidAmount + paying);
+        updated[expenseId][splitIdx] = { ...split, paidAmount: newPaid, isSettled: newPaid >= split.share - 0.005 };
       }
-
-      return expenses.map(e =>
-        updated[e.id] ? { ...e, splits: updated[e.id] } : e
-      );
-    }
-
-    // ── Global path: insertion-order traversal (unchanged) ───────────────
-    return expenses.map(expense => {
-      if (expense.paidBy !== to || remaining < 0.01) return expense;
-      const splits = expense.splits.map(split => {
-        if (split.participantId !== from || split.isSettled || remaining < 0.01) return split;
-        const owed       = round2(split.share - split.paidAmount);
-        if (owed < 0.01) return split;
-        const applying   = round2(Math.min(remaining, owed));
-        remaining        = round2(remaining - applying);
-        const newPaid    = round2(split.paidAmount + applying);
-        const newSettled = newPaid >= split.share - 0.005;
-        return { ...split, paidAmount: newPaid, isSettled: newSettled };
-      });
-      return { ...expense, splits };
+      return prev.map(e => updated[e.id] ? { ...e, splits: updated[e.id] } : e);
     });
   }
 
-  /** Selective: only touches highlighted expenses. */
-  function settleDebt(from: string, to: string, paymentAmount: number) {
-    setExpenses(prev => applyPayment(prev, from, to, paymentAmount, true));
+  function settleDebt(from: string, to: string, amount: number) {
+    if (isAuthenticated) {
+      void applyPaymentMutation({ from: from as Id<"participants">, to: to as Id<"participants">, amount, highlightedOnly: true });
+    } else {
+      applyLocalPayment(from, to, amount, true);
+    }
   }
 
-  /** Global: wipes the full net debt across all expenses regardless of highlight. */
-  function settleGlobal(from: string, to: string, paymentAmount: number) {
-    setExpenses(prev => applyPayment(prev, from, to, paymentAmount, false));
+  function settleGlobal(from: string, to: string, amount: number) {
+    if (isAuthenticated) {
+      void applyPaymentMutation({ from: from as Id<"participants">, to: to as Id<"participants">, amount, highlightedOnly: false });
+    } else {
+      applyLocalPayment(from, to, amount, false);
+    }
   }
 
-  // ── Derived data ───────────────────────────────────────────────────────────
-  const balances        = computeBalances(participants, expenses);
-  const settlements     = simplifyDebts(balances);
-  const total           = totalSpending(expenses);
-  const highlighted     = expenses.filter(e => e.isHighlighted);
-  const selectedDebts   = computeSelectedDebts(highlighted);
+  // ── Loading state: only show spinner during auth session resolution ─────────
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+        <svg className="animate-spin h-6 w-6 text-violet-500" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
@@ -232,81 +322,105 @@ function AppInner() {
               ? dark ? <Sun size={18} /> : <Moon size={18} />
               : <span className="w-[18px] h-[18px] block" />}
           </button>
+
+          {isAuthenticated ? (
+            <button
+              onClick={() => void signOut()}
+              aria-label="Sign out"
+              title="Sign out"
+              className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-red-500 dark:hover:text-red-400 transition-all duration-200 ease-in-out hover:scale-105 active:scale-95"
+            >
+              <LogOut size={18} />
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAuth(true)}
+              className={cn(
+                'text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:scale-105 active:scale-95',
+                'bg-violet-600 hover:bg-violet-500 text-white'
+              )}
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </header>
 
+      {/* Guest banner — shown below header when not authenticated */}
+      {!isAuthenticated && <GuestBanner onSignIn={() => setShowAuth(true)} />}
+
       <OfflineBanner />
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {/*
-          Desktop (lg): 2 columns
-            Left:  Members → Add Expense → Expenses
-            Right: Summary → Settlement Advice → Selected Settlement
-
-          Mobile (single column) logical order via `order-`:
-            1 Members, 2 Add Expense, 3 Summary, 4 Settlement Advice,
-            5 Expenses, 6 Selected Settlement
-        */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* ── Left column ── */}
-          <div className="space-y-5 lg:col-start-1">
-            <div className="order-1">
-              <ParticipantInput
-                participants={participants}
-                balances={balances}
-                onAdd={addParticipant}
-                onRemove={removeParticipant}
-              />
-            </div>
-            <div className="order-2">
-              <ExpenseForm
-                participants={participants}
-                onAdd={addExpense}
-              />
-            </div>
-            <div className="order-5">
-              <ExpenseList
-                expenses={expenses}
-                participants={participants}
-                onRemove={removeExpense}
-                onToggleHighlight={toggleHighlight}
-                onSelectAllUnsettled={selectAllUnsettled}
-              />
-            </div>
+      {/* Convex data loading shimmer (authenticated users only) */}
+      {convexLoading && (
+        <div className="max-w-6xl mx-auto px-4 pt-8 flex justify-center">
+          <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Loading your data…
           </div>
+        </div>
+      )}
 
-          {/* ── Right column ── */}
-          <div className="space-y-5 lg:col-start-2">
-            <div className="order-3">
-              <Dashboard
-                participants={participants}
-                balances={balances}
-                totalSpending={total}
-                settlements={settlements}
-                expenses={expenses}
-              />
+      <main className={convexLoading ? 'invisible' : undefined} aria-hidden={convexLoading}>
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-5 lg:col-start-1">
+              <div className="order-1">
+                <ParticipantInput
+                  participants={participants}
+                  balances={balances}
+                  onAdd={addParticipant}
+                  onRemove={removeParticipant}
+                />
+              </div>
+              <div className="order-2">
+                <ExpenseForm participants={participants} onAdd={addExpense} />
+              </div>
+              <div className="order-5">
+                <ExpenseList
+                  expenses={expenses}
+                  participants={participants}
+                  onRemove={removeExpense}
+                  onToggleHighlight={toggleHighlight}
+                  onSelectAllUnsettled={selectAllUnsettled}
+                />
+              </div>
             </div>
-            {/* Settlement Advice — middle-right (below Summary) */}
-            <div className="order-4">
-              <SettlementAdvice
-                settlements={settlements}
-                participants={participants}
-                onSettle={settleGlobal}
-              />
-            </div>
-            {/* Selected Settlement — bottom-right (across from Expenses) */}
-            <div className="order-6">
-              <SelectiveSummary
-                selectedDebts={selectedDebts}
-                participants={participants}
-                highlightedCount={highlighted.length}
-                onSettle={settleDebt}
-              />
+            <div className="space-y-5 lg:col-start-2">
+              <div className="order-3">
+                <Dashboard
+                  participants={participants}
+                  balances={balances}
+                  totalSpending={total}
+                  settlements={settlements}
+                  expenses={expenses}
+                />
+              </div>
+              <div className="order-4">
+                <SettlementAdvice
+                  settlements={settlements}
+                  participants={participants}
+                  onSettle={settleGlobal}
+                />
+              </div>
+              <div className="order-6">
+                <SelectiveSummary
+                  selectedDebts={selectedDebts}
+                  participants={participants}
+                  highlightedCount={highlighted.length}
+                  onSettle={settleDebt}
+                />
+              </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Auth modal — rendered as overlay, dismissible */}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }
