@@ -10,6 +10,7 @@ interface Props {
   participants: Participant[];
   highlightedCount: number;
   onSettle: (from: string, to: string, amount: number) => void;
+  readOnly?: boolean;
 }
 
 export default function SelectiveSummary({
@@ -17,6 +18,7 @@ export default function SelectiveSummary({
   participants,
   highlightedCount,
   onSettle,
+  readOnly = false,
 }: Props) {
   const { formatPrice } = useCurrency();
 
@@ -84,7 +86,7 @@ export default function SelectiveSummary({
                   <span className="text-sm font-bold text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 rounded-lg shrink-0">
                     {formatPrice(s.amount)}
                   </span>
-                  {!isOpen && (
+                  {!isOpen && !readOnly && (
                     <button
                       onClick={() => openSettle(s.from, s.to, s.amount)}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-600 text-white transition-all hover:brightness-110 hover:shadow-lg hover:shadow-violet-500/20 hover:scale-105 active:scale-95 shrink-0"
@@ -96,7 +98,7 @@ export default function SelectiveSummary({
                 </div>
 
                 {/* Partial payment input */}
-                {isOpen && (
+                {isOpen && !readOnly && (
                   <div className="flex items-center gap-2 px-3.5 py-2.5 bg-white dark:bg-slate-800 border-t border-violet-100 dark:border-violet-900/40">
                     <span className="text-xs text-gray-500 dark:text-slate-400 shrink-0">Amount:</span>
                     <input

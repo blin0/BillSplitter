@@ -10,6 +10,7 @@ interface Props {
   onRemove: (id: string) => void;
   onToggleHighlight: (id: string) => void;
   onSelectAllUnsettled: () => void;
+  readOnly?: boolean;
 }
 
 export default function ExpenseList({
@@ -18,6 +19,7 @@ export default function ExpenseList({
   onRemove,
   onToggleHighlight,
   onSelectAllUnsettled,
+  readOnly = false,
 }: Props) {
   const { formatPrice, currency } = useCurrency();
 
@@ -170,12 +172,14 @@ export default function ExpenseList({
                     </div>
                   )}
 
-                  <button
-                    onClick={ev => { ev.stopPropagation(); onRemove(e.id); }}
-                    className="text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-all hover:scale-110 active:scale-90"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={ev => { ev.stopPropagation(); onRemove(e.id); }}
+                      className="text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-all hover:scale-110 active:scale-90"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -9,9 +9,11 @@ interface Props {
   balances: Record<string, number>;
   onAdd: (name: string) => void;
   onRemove: (id: string) => void;
+  /** When true, hides add/remove controls (viewer role). */
+  readOnly?: boolean;
 }
 
-export default function ParticipantInput({ participants, balances, onAdd, onRemove }: Props) {
+export default function ParticipantInput({ participants, balances, onAdd, onRemove, readOnly = false }: Props) {
   const [input, setInput] = useState('');
 
   function handleAdd() {
@@ -26,23 +28,25 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
       <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">Group Members</h2>
 
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Add a person..."
-          className="flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm transition-colors focus:outline-none hover:border-gray-300 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/80 focus:border-violet-500 dark:focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:focus:ring-violet-500/20"
-        />
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-all hover:scale-105 active:scale-95"
-        >
-          <UserPlus size={15} />
-          Add
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="Add a person..."
+            className="flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm transition-colors focus:outline-none hover:border-gray-300 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/80 focus:border-violet-500 dark:focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:focus:ring-violet-500/20"
+          />
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-all hover:scale-105 active:scale-95"
+          >
+            <UserPlus size={15} />
+            Add
+          </button>
+        </div>
+      )}
 
       {participants.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2">No members yet.</p>
@@ -60,7 +64,7 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
               >
                 {p.name}
 
-                {locked ? (
+                {!readOnly && (locked ? (
                   /* ── Locked state: icon + tooltip ── */
                   <span className="relative group flex items-center">
                     <span className="opacity-40 grayscale cursor-not-allowed flex items-center">
@@ -92,7 +96,7 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
                   >
                     <X size={13} />
                   </button>
-                )}
+                ))}
               </span>
             );
           })}

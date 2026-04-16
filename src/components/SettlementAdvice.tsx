@@ -8,9 +8,10 @@ interface Props {
   settlements: Settlement[];
   participants: Participant[];
   onSettle: (from: string, to: string, amount: number) => void;
+  readOnly?: boolean;
 }
 
-export default function SettlementAdvice({ settlements, participants, onSettle }: Props) {
+export default function SettlementAdvice({ settlements, participants, onSettle, readOnly = false }: Props) {
   const { formatPrice } = useCurrency();
 
   // Key of row currently awaiting confirmation: `${from}:${to}`
@@ -75,7 +76,7 @@ export default function SettlementAdvice({ settlements, participants, onSettle }
                     {formatPrice(s.amount)}
                   </span>
 
-                  {!isConfirming && !isSettled && (
+                  {!isConfirming && !isSettled && !readOnly && (
                     <button
                       onClick={() => setConfirming(key)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-all hover:brightness-110 hover:shadow-lg hover:shadow-amber-500/20 hover:scale-105 active:scale-95 shrink-0"
@@ -91,7 +92,7 @@ export default function SettlementAdvice({ settlements, participants, onSettle }
                 </div>
 
                 {/* ── Confirmation banner ── */}
-                {isConfirming && (
+                {isConfirming && !readOnly && (
                   <div className="flex items-start gap-3 px-3.5 py-3 bg-white dark:bg-slate-800 border-t border-amber-100 dark:border-amber-900/40">
                     <p className="flex-1 text-xs text-slate-600 dark:text-slate-300 leading-snug">
                       Confirm{' '}

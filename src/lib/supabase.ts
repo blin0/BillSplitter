@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../types/supabase';
 
 // ─── Supabase connection ───────────────────────────────────────────────────────
 // Set these in your .env.local file:
@@ -16,7 +17,7 @@ if (!supabaseUrl || !supabaseAnon) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnon);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnon);
 
 // ─── MCP integration point ─────────────────────────────────────────────────────
 // When connecting via Supabase MCP, the MCP server uses the SERVICE_ROLE key
