@@ -1,19 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle } from 'lucide-react';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User } from 'lucide-react';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName } from '../lib/db';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, leaveGroup, deleteGroupPermanently } from '../lib/db';
 import GroupActions from './GroupActions';
+import ConfirmModal from './ui/ConfirmModal';
 
 interface Props {
-  groups:        GroupInfo[];
-  activeGroupId: string | null;
-  currentUserId: string | null;
-  onSelect:      (id: string) => void;
-  isOpen:        boolean;
-  onClose:       () => void;
-  onGroupAdded:  (group: GroupInfo) => void;
-  onGroupRenamed:(groupId: string, newName: string) => void;
+  groups:         GroupInfo[];
+  activeGroupId:  string | null;
+  currentUserId:  string | null;
+  onSelect:       (id: string) => void;
+  isOpen:         boolean;
+  onClose:        () => void;
+  onGroupAdded:   (group: GroupInfo) => void;
+  onGroupRenamed: (groupId: string, newName: string) => void;
+  /** Called after successfully leaving a group */
+  onGroupLeft:    (groupId: string) => void;
+  /** Called after successfully deleting a group */
+  onGroupDeleted: (groupId: string) => void;
+  /** Navigate to the Profile page */
+  onOpenProfile:  () => void;
+  /** Which page is currently active */
+  currentPage?:   'app' | 'profile';
 }
 
 // ─── Role metadata ────────────────────────────────────────────────────────────
@@ -182,6 +191,8 @@ function RemoveConfirmModal({
 
 // ─── GroupSidebar ─────────────────────────────────────────────────────────────
 
+type ConfirmAction = 'leave' | 'delete';
+
 export default function GroupSidebar({
   groups,
   activeGroupId,
@@ -191,8 +202,13 @@ export default function GroupSidebar({
   onClose,
   onGroupAdded,
   onGroupRenamed,
+  onGroupLeft,
+  onGroupDeleted,
+  onOpenProfile,
+  currentPage = 'app',
 }: Props) {
   const [copied,          setCopied         ] = useState(false);
+  const [groupsOpen,      setGroupsOpen     ] = useState(true);   // default expanded
   const [membersOpen,     setMembersOpen    ] = useState(false);
   const [members,         setMembers        ] = useState<GroupMemberInfo[]>([]);
   const [membersLoading,  setMembersLoading ] = useState(false);
@@ -200,6 +216,9 @@ export default function GroupSidebar({
   const [pendingRemove,   setPendingRemove  ] = useState<GroupMemberInfo | null>(null);
   const [editingGroupId,  setEditingGroupId ] = useState<string | null>(null);
   const [editingName,     setEditingName    ] = useState('');
+  const [confirmAction,   setConfirmAction  ] = useState<ConfirmAction | null>(null);
+  const [confirmLoading,  setConfirmLoading ] = useState(false);
+  const [confirmError,    setConfirmError   ] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const activeGroup = groups.find(g => g.id === activeGroupId);
@@ -287,6 +306,34 @@ export default function GroupSidebar({
     }
   }
 
+  async function handleConfirmAction() {
+    if (!activeGroupId || !confirmAction) return;
+    setConfirmLoading(true);
+    setConfirmError(null);
+
+    if (confirmAction === 'leave') {
+      const { error } = await leaveGroup(activeGroupId);
+      if (error) {
+        setConfirmError(error);
+        setConfirmLoading(false);
+        return;
+      }
+      setConfirmAction(null);
+      setConfirmLoading(false);
+      onGroupLeft(activeGroupId);
+    } else {
+      const { error } = await deleteGroupPermanently(activeGroupId);
+      if (error) {
+        setConfirmError(error);
+        setConfirmLoading(false);
+        return;
+      }
+      setConfirmAction(null);
+      setConfirmLoading(false);
+      onGroupDeleted(activeGroupId);
+    }
+  }
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -304,14 +351,11 @@ export default function GroupSidebar({
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-slate-800">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
-            My Groups
-          </span>
+        {/* ── Mobile close button (top-right, only on small screens) ── */}
+        <div className="flex lg:hidden items-center justify-end px-3 pt-3">
           <button
             onClick={onClose}
-            className="lg:hidden p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Close sidebar"
           >
             <X size={16} />
@@ -319,74 +363,102 @@ export default function GroupSidebar({
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pt-2 lg:pt-3">
 
-          {/* Group list */}
-          <nav className="p-2 space-y-0.5">
-            {groups.map(group => {
-              const isAdminOfGroup = group.role === 'admin';
-              const isEditing      = editingGroupId === group.id;
+          {/* ── My Groups collapsible ── */}
+          <div className="p-2">
+            {/* Trigger row — matches "Manage members" style exactly */}
+            <button
+              type="button"
+              onClick={() => setGroupsOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <Users size={14} className="shrink-0" />
+              <span className="flex-1 text-left font-medium">My Groups</span>
+              {/* Active group name as a subtle preview when collapsed */}
+              {!groupsOpen && activeGroup && (
+                <span className="truncate max-w-[80px] text-[11px] text-violet-500 dark:text-violet-400 font-medium">
+                  {activeGroup.name}
+                </span>
+              )}
+              <ChevronDown
+                size={14}
+                className={cn('shrink-0 transition-transform duration-200', groupsOpen && 'rotate-180')}
+              />
+            </button>
 
-              // ── Editing state: inline rename input ──
-              if (isEditing) {
-                return (
-                  <div
-                    key={group.id}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 dark:bg-violet-900/30"
-                  >
-                    <input
-                      ref={renameInputRef}
-                      value={editingName}
-                      onChange={e => setEditingName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter')  { e.preventDefault(); commitRename(); }
-                        if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
-                      }}
-                      onBlur={commitRename}
-                      maxLength={50}
-                      className={cn(
-                        'flex-1 min-w-0 bg-transparent text-sm font-medium',
-                        'text-violet-700 dark:text-violet-300',
-                        'border-b border-violet-300 dark:border-violet-600',
-                        'outline-none focus:border-violet-500 dark:focus:border-violet-400',
-                        'placeholder:text-violet-400',
-                      )}
-                    />
-                    <span className="shrink-0 text-[10px] text-violet-400 dark:text-violet-500 select-none">
-                      ↵
-                    </span>
-                  </div>
-                );
-              }
+            {/* Collapsible group list */}
+            {groupsOpen && (
+              <div className="mt-1 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden">
+                {groups.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">No groups yet.</p>
+                ) : (
+                  <nav className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                    {groups.map(group => {
+                      const isAdminOfGroup = group.role === 'admin';
+                      const isEditing      = editingGroupId === group.id;
 
-              // ── Normal state ──
-              return (
-                <button
-                  key={group.id}
-                  onClick={() => handleSelect(group.id)}
-                  onDoubleClick={isAdminOfGroup ? () => startRename(group) : undefined}
-                  title={isAdminOfGroup ? 'Double-click to rename' : undefined}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-sm transition-colors',
-                    group.id === activeGroupId
-                      ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium'
-                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800',
-                  )}
-                >
-                  <span className="flex-1 truncate">{group.name}</span>
-                  <span className={cn(
-                    'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full',
-                    ROLE_BADGE_CLASS[group.role as Role] ?? ROLE_BADGE_CLASS.viewer,
-                  )}>
-                    {group.role.charAt(0).toUpperCase() + group.role.slice(1)}
-                  </span>
-                  {group.id === activeGroupId && (
-                    <ChevronRight size={14} className="shrink-0 text-violet-400" />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                      // ── Editing state: inline rename input ──
+                      if (isEditing) {
+                        return (
+                          <div
+                            key={group.id}
+                            className="flex items-center gap-2 px-3 py-2.5 bg-violet-50 dark:bg-violet-900/30"
+                          >
+                            <input
+                              ref={renameInputRef}
+                              value={editingName}
+                              onChange={e => setEditingName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter')  { e.preventDefault(); commitRename(); }
+                                if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+                              }}
+                              onBlur={commitRename}
+                              maxLength={50}
+                              className={cn(
+                                'flex-1 min-w-0 bg-transparent text-sm font-medium',
+                                'text-violet-700 dark:text-violet-300',
+                                'border-b border-violet-300 dark:border-violet-600',
+                                'outline-none focus:border-violet-500 dark:focus:border-violet-400',
+                              )}
+                            />
+                            <span className="shrink-0 text-[10px] text-violet-400 dark:text-violet-500 select-none">↵</span>
+                          </div>
+                        );
+                      }
+
+                      // ── Normal row ──
+                      return (
+                        <button
+                          key={group.id}
+                          onClick={() => handleSelect(group.id)}
+                          onDoubleClick={isAdminOfGroup ? () => startRename(group) : undefined}
+                          title={isAdminOfGroup ? 'Double-click to rename' : undefined}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors',
+                            group.id === activeGroupId && currentPage === 'app'
+                              ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium'
+                              : 'text-gray-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/60',
+                          )}
+                        >
+                          <span className="flex-1 truncate">{group.name}</span>
+                          <span className={cn(
+                            'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full',
+                            ROLE_BADGE_CLASS[group.role as Role] ?? ROLE_BADGE_CLASS.viewer,
+                          )}>
+                            {group.role.charAt(0).toUpperCase() + group.role.slice(1)}
+                          </span>
+                          {group.id === activeGroupId && currentPage === 'app' && (
+                            <ChevronRight size={13} className="shrink-0 text-violet-400 dark:text-violet-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* ── Active group's invite code ── */}
           {activeGroup && (
@@ -482,6 +554,38 @@ export default function GroupSidebar({
             </div>
           )}
 
+          {/* ── Group Management ── */}
+          {activeGroup && (
+            <div className="mx-3 mt-3 mb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2 px-1">
+                Group Management
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {/* Leave Group — ghost button, all roles */}
+                <button
+                  type="button"
+                  onClick={() => { setConfirmError(null); setConfirmAction('leave'); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <LogOut size={14} className="shrink-0" />
+                  Leave Group
+                </button>
+
+                {/* Delete Group — ghost until hover, admin only */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => { setConfirmError(null); setConfirmAction('delete'); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/15 transition-colors group"
+                  >
+                    <Trash2 size={14} className="shrink-0 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" />
+                    Delete Group
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Divider ── */}
           <div className="mx-3 my-4 border-t border-gray-100 dark:border-slate-800" />
 
@@ -490,19 +594,58 @@ export default function GroupSidebar({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-3">
               Add a group
             </p>
-            <GroupActions onCreated={handleGroupAdded} onJoined={handleGroupAdded} />
+            <GroupActions
+              onCreated={handleGroupAdded}
+              onJoined={handleGroupAdded}
+              onUpgrade={() => { onOpenProfile(); onClose(); }}
+            />
           </div>
 
         </div>
+
+        {/* ── Profile footer (always visible at bottom) ── */}
+        <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 p-2">
+          <button
+            type="button"
+            onClick={() => { onOpenProfile(); onClose(); }}
+            className={cn(
+              'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+              currentPage === 'profile'
+                ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-semibold'
+                : 'text-gray-600 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-700 dark:hover:text-violet-300',
+            )}
+          >
+            <User size={15} className="shrink-0" />
+            Profile
+          </button>
+        </div>
       </aside>
 
-      {/* ── Remove confirmation modal ── */}
+      {/* ── Remove member modal ── */}
       {pendingRemove && activeGroup && (
         <RemoveConfirmModal
           member={pendingRemove}
           groupName={activeGroup.name}
           onConfirm={handleRemoveConfirmed}
           onCancel={() => setPendingRemove(null)}
+        />
+      )}
+
+      {/* ── Leave / Delete group modal ── */}
+      {confirmAction && activeGroup && (
+        <ConfirmModal
+          title={confirmAction === 'leave' ? 'Leave group?' : 'Delete group?'}
+          message={
+            confirmAction === 'leave'
+              ? `Are you sure? You will lose access to ${activeGroup.name}'s history and will need a new invite code to rejoin.`
+              : `DANGER: This will permanently delete all expenses, splits, members, and activity for everyone in "${activeGroup.name}".\n\nThis cannot be undone.`
+          }
+          confirmLabel={confirmAction === 'leave' ? 'Leave Group' : 'Delete Forever'}
+          variant="danger"
+          loading={confirmLoading}
+          error={confirmError}
+          onConfirm={handleConfirmAction}
+          onCancel={() => { setConfirmAction(null); setConfirmError(null); }}
         />
       )}
     </>

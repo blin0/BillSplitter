@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X } from 'lucide-react';
+import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X, UserCircle } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { Expense, Participant } from './types';
 import {
@@ -9,7 +9,7 @@ import {
   totalSpending,
   round2,
 } from './utils/calculations';
-import { CurrencyProvider } from './context/CurrencyContext';
+import { CurrencyProvider, useCurrency, type CurrencyCode, CURRENCIES } from './context/CurrencyContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ParticipantInput from './components/ParticipantInput';
 import ExpenseForm from './components/ExpenseForm';
@@ -22,6 +22,8 @@ import OfflineBanner from './components/OfflineBanner';
 import SignInModal from './components/SignInModal';
 import GroupSidebar from './components/GroupSidebar';
 import GroupActions from './components/GroupActions';
+import ActivityLog from './components/ActivityLog';
+import Profile from './pages/Profile';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
   fetchUserGroups,
@@ -32,6 +34,8 @@ import {
   insertExpense,
   deleteExpense,
   syncSplitsForExpense,
+  logActivity,
+  fetchOwnProfile,
   type GroupInfo,
 } from './lib/db';
 
@@ -86,8 +90,10 @@ function useTheme() {
 function AppInner() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { dark, mounted, toggle } = useTheme();
-  const [showSignIn,  setShowSignIn ] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { setCurrency } = useCurrency();
+  const [showSignIn,   setShowSignIn  ] = useState(false);
+  const [sidebarOpen,  setSidebarOpen ] = useState(false);
+  const [currentPage,  setCurrentPage ] = useState<'app' | 'profile'>('app');
 
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
@@ -124,6 +130,17 @@ function AppInner() {
     setDbParticipants,
     setDbExpenses,
   );
+
+  // Sync default_currency from profile on sign-in
+  useEffect(() => {
+    if (!user) return;
+    fetchOwnProfile().then(({ data }) => {
+      if (!data?.defaultCurrency) return;
+      if (data.defaultCurrency in CURRENCIES) {
+        setCurrency(data.defaultCurrency as CurrencyCode);
+      }
+    });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load all groups when user signs in
   useEffect(() => {
@@ -304,6 +321,7 @@ function AppInner() {
     setActiveGroupId(id);
     saveActiveGroup(id);
     setSidebarOpen(false);
+    setCurrentPage('app');
   }
 
   function handleGroupAdded(group: GroupInfo) {
@@ -316,6 +334,26 @@ function AppInner() {
 
   function handleGroupRenamed(groupId: string, newName: string) {
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, name: newName } : g));
+  }
+
+  function handleGroupLeft(groupId: string) {
+    setGroups(prev => {
+      const remaining = prev.filter(g => g.id !== groupId);
+      // If we left the active group, switch to the next available one
+      if (activeGroupId === groupId) {
+        const next = remaining[0]?.id ?? null;
+        setActiveGroupId(next);
+        if (next) saveActiveGroup(next);
+        setDbParticipants([]);
+        setDbExpenses([]);
+      }
+      return remaining;
+    });
+  }
+
+  function handleGroupDeleted(groupId: string) {
+    // Same as leaving — remove from list and clear state
+    handleGroupLeft(groupId);
   }
 
   // ── Participant handlers ───────────────────────────────────────────────────
@@ -350,6 +388,15 @@ function AppInner() {
       const { data: newId, error } = await insertExpense(activeGroupId, expense);
       if (error || !newId) return;
       setDbExpenses(prev => [...prev, { ...expense, id: newId }]);
+      void logActivity({
+        groupId:       activeGroupId,
+        actionType:    'EXPENSE_ADDED',
+        expenseId:     newId,
+        amount:        expense.totalAmount,
+        participantId: expense.paidBy,   // payer = the group member this is "for"
+        isSettled:     false,            // brand-new expense is never settled
+        message:       expense.description,
+      });
     } else {
       setGuestExpenses(prev => [...prev, expense]);
     }
@@ -357,9 +404,22 @@ function AppInner() {
 
   async function removeExpense(id: string) {
     if (isSignedIn) {
+      const found = dbExpenses.find(e => e.id === id);
       const { error } = await deleteExpense(id);
       if (error) return;
       setDbExpenses(prev => prev.filter(e => e.id !== id));
+      if (activeGroupId && found) {
+        const wasSettled = found.splits.length > 0 && found.splits.every(s => s.isSettled);
+        void logActivity({
+          groupId:       activeGroupId,
+          actionType:    'EXPENSE_DELETED',
+          expenseId:     null,           // already deleted — can't keep FK
+          amount:        found.totalAmount,
+          participantId: found.paidBy,   // original payer
+          isSettled:     wasSettled,
+          message:       found.description,
+        });
+      }
     } else {
       setGuestExpenses(prev => prev.filter(e => e.id !== id));
     }
@@ -441,12 +501,25 @@ function AppInner() {
     await Promise.all(changed.map(e => syncSplitsForExpense(e.id, e.splits)));
   }, [isSignedIn]);
 
+  function nameOf(id: string) {
+    return participants.find(p => p.id === id)?.name ?? id;
+  }
+
   function settleDebt(from: string, to: string, amount: number) {
     setExpenses(prev => {
       const next = applyPayment(prev, from, to, amount, true);
       syncSettlement(next, prev);
       return next;
     });
+    if (isSignedIn && activeGroupId) {
+      void logActivity({
+        groupId:       activeGroupId,
+        actionType:    'SETTLEMENT_MADE',
+        amount,
+        participantId: from,               // the member who paid
+        message:       `settled for ${nameOf(from)} → ${nameOf(to)}`,
+      });
+    }
   }
 
   function settleGlobal(from: string, to: string, amount: number) {
@@ -455,6 +528,15 @@ function AppInner() {
       syncSettlement(next, prev);
       return next;
     });
+    if (isSignedIn && activeGroupId) {
+      void logActivity({
+        groupId:       activeGroupId,
+        actionType:    'SETTLEMENT_MADE',
+        amount,
+        participantId: from,               // the member who paid
+        message:       `settled for ${nameOf(from)} → ${nameOf(to)}`,
+      });
+    }
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -491,13 +573,17 @@ function AppInner() {
           onClose={() => setSidebarOpen(false)}
           onGroupAdded={handleGroupAdded}
           onGroupRenamed={handleGroupRenamed}
+          onGroupLeft={handleGroupLeft}
+          onGroupDeleted={handleGroupDeleted}
+          onOpenProfile={() => setCurrentPage('profile')}
+          currentPage={currentPage}
         />
       )}
 
       {/* Main area */}
       <div className={isSignedIn ? 'flex-1 min-w-0 lg:ml-64' : 'flex-1 min-w-0'}>
 
-        {/* ── Header ── */}
+        {/* ── Unified header — always visible ── */}
         <header className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
           <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
 
@@ -512,23 +598,39 @@ function AppInner() {
               </button>
             )}
 
-            <div className="p-2 bg-violet-600 rounded-xl">
-              <Receipt size={20} className="text-white" />
-            </div>
+            {/* Logo + title — clicking navigates back when on the profile page */}
+            <div
+              className={`flex items-center gap-2 flex-1 min-w-0${
+                currentPage === 'profile' && isSignedIn
+                  ? ' cursor-pointer rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors -ml-1 px-1 py-0.5'
+                  : ''
+              }`}
+              onClick={currentPage === 'profile' && isSignedIn ? () => setCurrentPage('app') : undefined}
+              role={currentPage === 'profile' && isSignedIn ? 'button' : undefined}
+              tabIndex={currentPage === 'profile' && isSignedIn ? 0 : undefined}
+              onKeyDown={currentPage === 'profile' && isSignedIn
+                ? (e) => { if (e.key === 'Enter' || e.key === ' ') setCurrentPage('app'); }
+                : undefined}
+              aria-label={currentPage === 'profile' && isSignedIn ? 'Back to dashboard' : undefined}
+            >
+              <div className="p-2 bg-violet-600 rounded-xl shrink-0">
+                <Receipt size={20} className="text-white" />
+              </div>
 
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-none">
-                BillSplitter
-              </h1>
-              {/* Active group name on desktop when signed in */}
-              {isSignedIn && activeGroupId && (
-                <p className="text-xs text-gray-400 dark:text-slate-500 truncate">
-                  {groups.find(g => g.id === activeGroupId)?.name ?? ''}
-                </p>
-              )}
-              {!isSignedIn && (
-                <p className="text-xs text-gray-400 dark:text-slate-500">Split expenses fairly</p>
-              )}
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-none">
+                  BillSplitter
+                </h1>
+                {currentPage === 'profile' && isSignedIn ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">Profile</p>
+                ) : isSignedIn && activeGroupId ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500 truncate">
+                    {groups.find(g => g.id === activeGroupId)?.name ?? ''}
+                  </p>
+                ) : !isSignedIn ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">Split expenses fairly</p>
+                ) : null}
+              </div>
             </div>
 
             <CurrencyDropdown />
@@ -545,12 +647,20 @@ function AppInner() {
 
             {isSignedIn ? (
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 select-none">
+                <button
+                  onClick={() => setCurrentPage('profile')}
+                  title="View profile"
+                  className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 select-none hover:ring-2 hover:ring-violet-400 hover:ring-offset-1 dark:hover:ring-offset-slate-900 transition-all"
+                >
                   {(user.user_metadata?.full_name ?? user.email ?? '?')[0].toUpperCase()}
-                </div>
-                <span className="hidden sm:block text-sm text-gray-700 dark:text-slate-300 max-w-[120px] truncate">
-                  {user.user_metadata?.full_name ?? user.email}
-                </span>
+                </button>
+                <button
+                  onClick={() => setCurrentPage('profile')}
+                  className="hidden sm:flex items-center gap-1 text-sm text-gray-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-[120px] truncate"
+                >
+                  <UserCircle size={13} className="shrink-0" />
+                  <span className="truncate">{user.user_metadata?.full_name ?? user.email}</span>
+                </button>
                 <button
                   onClick={signOut}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
@@ -569,6 +679,15 @@ function AppInner() {
             )}
           </div>
         </header>
+
+        {/* ── Page content ── */}
+        {currentPage === 'profile' && isSignedIn ? (
+          <Profile
+            authEmail={user?.email ?? null}
+            authName={user?.user_metadata?.full_name ?? null}
+            userId={user?.id ?? null}
+          />
+        ) : (<>
 
         <OfflineBanner />
 
@@ -650,7 +769,7 @@ function AppInner() {
                   Create a group to get started, or join one with a code.
                 </p>
               </div>
-              <GroupActions onCreated={handleGroupAdded} onJoined={handleGroupAdded} />
+              <GroupActions onCreated={handleGroupAdded} onJoined={handleGroupAdded} onUpgrade={() => setCurrentPage('profile')} />
             </div>
           </div>
         )}
@@ -729,6 +848,8 @@ function AppInner() {
                     participants={participants}
                     onSettle={settleGlobal}
                     readOnly={isSignedIn && isViewer}
+                    groupId={activeGroupId ?? undefined}
+                    groupName={groups.find(g => g.id === activeGroupId)?.name}
                   />
                 </div>
                 <div className="order-6">
@@ -738,12 +859,20 @@ function AppInner() {
                     highlightedCount={highlighted.length}
                     onSettle={settleDebt}
                     readOnly={isSignedIn && isViewer}
+                    groupId={activeGroupId ?? undefined}
+                    groupName={groups.find(g => g.id === activeGroupId)?.name}
                   />
                 </div>
+                {isSignedIn && activeGroupId && (
+                  <div className="order-7">
+                    <ActivityLog groupId={activeGroupId} />
+                  </div>
+                )}
               </div>
             </div>
           </main>
         )}
+        </>)}
       </div>
 
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}

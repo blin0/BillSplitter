@@ -43,6 +43,195 @@ export interface GroupMemberInfo {
   email:    string | null;
 }
 
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+export interface OwnProfile {
+  id:                 string;
+  fullName:           string | null;
+  avatarUrl:          string | null;
+  venmoHandle:        string | null;
+  cashappHandle:      string | null;
+  zelleHandle:        string | null;
+  defaultCurrency:    string;
+  showEmail:          boolean;
+  showActivity:       boolean;
+  // Stripe / subscription
+  stripeCustomerId:   string | null;
+  subscriptionStatus: string | null;
+  isPro:              boolean;
+  priceId:            string | null;
+}
+
+export interface MemberProfile {
+  userId:        string;
+  fullName:      string | null;
+  avatarUrl:     string | null;
+  venmoHandle:   string | null;
+  cashappHandle: string | null;
+  zelleHandle:   string | null;
+}
+
+export async function fetchOwnProfile(): Promise<DbResult<OwnProfile>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: 'Not authenticated' };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle, default_currency, show_email, show_activity, stripe_customer_id, subscription_status, is_pro, price_id')
+    .eq('id', user.id)
+    .single();
+
+  if (error) return { data: null, error: error.message };
+
+  return {
+    data: {
+      id:                 data.id,
+      fullName:           data.full_name,
+      avatarUrl:          data.avatar_url,
+      venmoHandle:        data.venmo_handle,
+      cashappHandle:      data.cashapp_handle,
+      zelleHandle:        data.zelle_handle ?? null,
+      defaultCurrency:    data.default_currency ?? 'USD',
+      showEmail:          data.show_email  ?? true,
+      showActivity:       data.show_activity ?? true,
+      stripeCustomerId:   data.stripe_customer_id ?? null,
+      subscriptionStatus: data.subscription_status ?? null,
+      isPro:              data.is_pro ?? false,
+      priceId:            data.price_id ?? null,
+    },
+    error: null,
+  };
+}
+
+export async function updateOwnProfile(updates: {
+  fullName?:        string | null;
+  avatarUrl?:       string | null;
+  venmoHandle?:     string | null;
+  cashappHandle?:   string | null;
+  zelleHandle?:     string | null;
+  defaultCurrency?: string;
+  showEmail?:       boolean;
+  showActivity?:    boolean;
+}): Promise<DbResult<void>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: 'Not authenticated' };
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      ...(updates.fullName        !== undefined && { full_name:        updates.fullName        }),
+      ...(updates.avatarUrl       !== undefined && { avatar_url:       updates.avatarUrl       }),
+      ...(updates.venmoHandle     !== undefined && { venmo_handle:     updates.venmoHandle     }),
+      ...(updates.cashappHandle   !== undefined && { cashapp_handle:   updates.cashappHandle   }),
+      ...(updates.zelleHandle     !== undefined && { zelle_handle:     updates.zelleHandle     }),
+      ...(updates.defaultCurrency !== undefined && { default_currency: updates.defaultCurrency }),
+      ...(updates.showEmail       !== undefined && { show_email:       updates.showEmail       }),
+      ...(updates.showActivity    !== undefined && { show_activity:    updates.showActivity    }),
+    })
+    .eq('id', user.id);
+
+  return { data: null, error: error?.message ?? null };
+}
+
+/**
+ * Fetch profiles for all *invited* (authenticated) members of a group.
+ * Only returns rows from the `members` table joined with `profiles` —
+ * ghost participants added via named_participants are never included.
+ * Used by SettleModal's Smart Settle section.
+ */
+export async function fetchInvitedMemberProfiles(groupId: string): Promise<DbResult<MemberProfile[]>> {
+  const { data: memberRows, error } = await supabase
+    .from('members')
+    .select('user_id')
+    .eq('group_id', groupId);
+
+  if (error) return { data: null, error: error.message };
+
+  const userIds = (memberRows ?? []).map(r => r.user_id);
+  if (userIds.length === 0) return { data: [], error: null };
+
+  const { data: profiles, error: pErr } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle')
+    .in('id', userIds);
+
+  if (pErr) return { data: null, error: pErr.message };
+
+  return {
+    data: (profiles ?? []).map(p => ({
+      userId:        p.id,
+      fullName:      p.full_name,
+      avatarUrl:     p.avatar_url ?? null,
+      venmoHandle:   p.venmo_handle,
+      cashappHandle: p.cashapp_handle,
+      zelleHandle:   p.zelle_handle ?? null,
+    })),
+    error: null,
+  };
+}
+
+export interface OwnStats {
+  groupCount:   number;
+  expenseCount: number;
+}
+
+// ─── Stripe / subscription ────────────────────────────────────────────────────
+
+/** Kick off a Stripe Checkout session. Returns the redirect URL. */
+export async function createCheckoutSession(priceId: string): Promise<DbResult<string>> {
+  const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+    body: { price_id: priceId },
+  });
+
+  if (error) return { data: null, error: error.message ?? 'Checkout failed' };
+  if (!data?.url) return { data: null, error: 'No checkout URL returned' };
+
+  return { data: data.url as string, error: null };
+}
+
+/** Count how many groups the current user owns (role = admin). Used for free-tier gate. */
+export async function fetchOwnGroupCount(): Promise<DbResult<number>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: 0, error: null };
+
+  const { count, error } = await supabase
+    .from('members')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('role', 'admin');
+
+  return { data: count ?? 0, error: error?.message ?? null };
+}
+
+/** Permanently delete the current user's auth account and all their data. */
+export async function deleteOwnAccount(): Promise<DbResult<void>> {
+  const { error } = await supabase.rpc('delete_own_account');
+  return { data: null, error: error?.message ?? null };
+}
+
+/** Fetch profile-page stats for the current user. */
+export async function fetchOwnStats(): Promise<DbResult<OwnStats>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: { groupCount: 0, expenseCount: 0 }, error: null };
+
+  const [groupRes, expenseRes] = await Promise.all([
+    supabase.from('members').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase
+      .from('activity_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('actor_id', user.id)
+      .eq('action_type', 'EXPENSE_ADDED'),
+  ]);
+
+  return {
+    data: {
+      groupCount:   groupRes.count   ?? 0,
+      expenseCount: expenseRes.count ?? 0,
+    },
+    error: groupRes.error?.message ?? expenseRes.error?.message ?? null,
+  };
+}
+
 // ─── Groups ───────────────────────────────────────────────────────────────────
 
 /** Fetch all groups the current user belongs to. */
@@ -93,6 +282,37 @@ export async function createGroup(name: string): Promise<DbResult<GroupInfo>> {
     },
     error: null,
   };
+}
+
+/**
+ * Leave a group. Throws a user-readable error if the caller is the sole admin.
+ * The user's name stays on all historical expenses so the math remains intact.
+ */
+export async function leaveGroup(groupId: string): Promise<DbResult<void>> {
+  const { error } = await supabase.rpc('leave_group', { p_group_id: groupId });
+  if (error) {
+    const msg = error.message.includes('sole_admin')
+      ? 'You are the only admin. Transfer ownership to another member before leaving.'
+      : error.message.includes('not_a_member')
+      ? 'You are not a member of this group.'
+      : error.message;
+    return { data: null, error: msg };
+  }
+  return { data: null, error: null };
+}
+
+/**
+ * Admin-only hard delete. Permanently removes all group data for every member.
+ */
+export async function deleteGroupPermanently(groupId: string): Promise<DbResult<void>> {
+  const { error } = await supabase.rpc('delete_group_permanently', { p_group_id: groupId });
+  if (error) {
+    const msg = error.message.includes('not_admin')
+      ? 'Only admins can delete a group.'
+      : error.message;
+    return { data: null, error: msg };
+  }
+  return { data: null, error: null };
 }
 
 /** Admin-only: rename a group. */
@@ -372,6 +592,123 @@ export async function deleteExpense(expenseId: string): Promise<DbResult<void>> 
     .eq('id', expenseId);
 
   return { data: null, error: error?.message ?? null };
+}
+
+// ─── Activity log ─────────────────────────────────────────────────────────────
+
+export type ActivityActionType = 'EXPENSE_ADDED' | 'EXPENSE_DELETED' | 'SETTLEMENT_MADE';
+
+export interface ActivityProfile {
+  id:        string;
+  fullName:  string | null;
+  avatarUrl: string | null;
+}
+
+export interface ActivityEntry {
+  id:              string;
+  actionType:      ActivityActionType | null;
+  /** For expenses: the description text. For settlements: omitted. */
+  message:         string;
+  actorId:         string | null;
+  targetId:        string | null;
+  expenseId:       string | null;
+  participantId:   string | null;
+  /** Named participant (payer for expenses, debtor for settlements) */
+  participantName: string | null;
+  amount:          number | null;
+  /** null = n/a (e.g. settlement), true = all splits settled, false = unsettled */
+  isSettled:       boolean | null;
+  createdAt:       string;
+  actorProfile?:   ActivityProfile | null;
+  targetProfile?:  ActivityProfile | null;
+}
+
+export interface LogActivityParams {
+  groupId:        string;
+  /** For expenses, store the expense description. For settlements, a short verb phrase. */
+  message:        string;
+  actionType:     ActivityActionType;
+  expenseId?:     string | null;
+  targetId?:      string | null;
+  amount?:        number | null;
+  participantId?: string | null;
+  isSettled?:     boolean | null;
+}
+
+export async function fetchActivityLogs(groupId: string): Promise<DbResult<ActivityEntry[]>> {
+  const { data, error } = await supabase
+    .from('activity_logs')
+    .select('id, actor_id, target_id, expense_id, amount, action_type, message, created_at, participant_id, is_settled')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) return { data: null, error: error.message };
+
+  const rows = data ?? [];
+
+  // Batch-fetch auth profiles for actor/target
+  const profileIds = [...new Set(
+    rows.flatMap(r => [r.actor_id, r.target_id]).filter((id): id is string => !!id)
+  )];
+  const profileMap = new Map<string, ActivityProfile>();
+  if (profileIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', profileIds);
+    for (const p of profiles ?? []) {
+      profileMap.set(p.id, { id: p.id, fullName: p.full_name, avatarUrl: p.avatar_url });
+    }
+  }
+
+  // Batch-fetch named participant names
+  const participantIds = [...new Set(
+    rows.map(r => r.participant_id).filter((id): id is string => !!id)
+  )];
+  const participantNameMap = new Map<string, string>();
+  if (participantIds.length > 0) {
+    const { data: parts } = await supabase
+      .from('named_participants')
+      .select('id, name')
+      .in('id', participantIds);
+    for (const p of parts ?? []) {
+      participantNameMap.set(p.id, p.name);
+    }
+  }
+
+  return {
+    data: rows.map(row => ({
+      id:              row.id,
+      actionType:      (row.action_type as ActivityActionType | null) ?? null,
+      message:         row.message,
+      actorId:         row.actor_id,
+      targetId:        row.target_id,
+      expenseId:       row.expense_id,
+      participantId:   row.participant_id,
+      participantName: row.participant_id ? (participantNameMap.get(row.participant_id) ?? null) : null,
+      amount:          row.amount != null ? Number(row.amount) : null,
+      isSettled:       row.is_settled ?? null,
+      createdAt:       row.created_at,
+      actorProfile:    row.actor_id  ? (profileMap.get(row.actor_id)  ?? null) : null,
+      targetProfile:   row.target_id ? (profileMap.get(row.target_id) ?? null) : null,
+    })),
+    error: null,
+  };
+}
+
+/** Fire-and-forget; errors are intentionally swallowed so they never break the primary action. */
+export async function logActivity(params: LogActivityParams): Promise<void> {
+  await supabase.rpc('log_activity', {
+    p_group_id:       params.groupId,
+    p_message:        params.message,
+    p_action_type:    params.actionType,
+    p_expense_id:     params.expenseId     ?? null,
+    p_target_id:      params.targetId      ?? null,
+    p_amount:         params.amount        ?? null,
+    p_participant_id: params.participantId ?? null,
+    p_is_settled:     params.isSettled     ?? null,
+  });
 }
 
 // ─── Splits ───────────────────────────────────────────────────────────────────

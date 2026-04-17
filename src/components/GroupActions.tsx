@@ -1,31 +1,46 @@
 import { useState, type FormEvent } from 'react';
-import { Plus, Hash, Loader2, Users } from 'lucide-react';
-import { createGroup, joinGroupByCode, type GroupInfo } from '../lib/db';
+import { Plus, Hash, Loader2, Users, Lock, Sparkles } from 'lucide-react';
+import { createGroup, joinGroupByCode, fetchOwnGroupCount, type GroupInfo } from '../lib/db';
+import { useSubscription } from '../hooks/useSubscription';
+
+const FREE_TIER_GROUP_LIMIT = 3;
 
 interface Props {
   /** Called after successfully creating a group. */
-  onCreated: (group: GroupInfo) => void;
+  onCreated:  (group: GroupInfo) => void;
   /** Called after successfully joining a group. */
-  onJoined:  (group: GroupInfo) => void;
+  onJoined:   (group: GroupInfo) => void;
+  /** Called when the user hits the free-tier limit — parent should open the upgrade modal. */
+  onUpgrade?: () => void;
 }
 
-/**
- * Two-panel card: create a new group OR join one by 6-char code.
- * Rendered as a centered page when the user has no groups yet,
- * or inside the sidebar for returning users.
- */
-export default function GroupActions({ onCreated, onJoined }: Props) {
+export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) {
+  const subscription = useSubscription();
+
   // ── Create state ───────────────────────────────────────────────────────────
   const [createName,    setCreateName   ] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createError,   setCreateError  ] = useState<string | null>(null);
+  const [blocked,       setBlocked      ] = useState(false);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     const name = createName.trim();
     if (!name) return;
     setCreateError(null);
+    setBlocked(false);
     setCreateLoading(true);
+
+    // ── Free-tier gate: max 3 owned groups ──────────────────────────────────
+    if (!subscription.isPro) {
+      const { data: count } = await fetchOwnGroupCount();
+      if ((count ?? 0) >= FREE_TIER_GROUP_LIMIT) {
+        setCreateLoading(false);
+        setBlocked(true);
+        return;
+      }
+    }
+
     const { data, error } = await createGroup(name);
     setCreateLoading(false);
     if (error || !data) {
@@ -74,29 +89,54 @@ export default function GroupActions({ onCreated, onJoined }: Props) {
           </h3>
         </div>
 
-        <form onSubmit={handleCreate} className="space-y-2.5">
-          <input
-            type="text"
-            required
-            placeholder="e.g. Japan Trip 2025"
-            value={createName}
-            onChange={e => setCreateName(e.target.value)}
-            maxLength={60}
-            className="w-full px-3 py-2 rounded-xl text-sm bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-          />
-          {createError && (
-            <p className="text-xs text-red-500 dark:text-red-400">{createError}</p>
-          )}
-          <button
-            type="submit"
-            disabled={createLoading || !createName.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl py-2 transition-colors"
-          >
-            {createLoading
-              ? <><Loader2 size={14} className="animate-spin" /> Creating…</>
-              : 'Create group'}
-          </button>
-        </form>
+        {/* ── Upgrade gate ── */}
+        {blocked ? (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3.5 space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <Lock size={14} className="text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">
+                  Free plan limit reached
+                </p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
+                  You've used all {FREE_TIER_GROUP_LIMIT} free groups. Upgrade to Pro for unlimited groups.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setBlocked(false); onUpgrade?.(); }}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl py-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
+            >
+              <Sparkles size={13} />
+              Upgrade to Pro
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleCreate} className="space-y-2.5">
+            <input
+              type="text"
+              required
+              placeholder="e.g. Japan Trip 2025"
+              value={createName}
+              onChange={e => setCreateName(e.target.value)}
+              maxLength={60}
+              className="w-full px-3 py-2 rounded-xl text-sm bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            />
+            {createError && (
+              <p className="text-xs text-red-500 dark:text-red-400">{createError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={createLoading || !createName.trim() || subscription.loading}
+              className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl py-2 transition-colors"
+            >
+              {createLoading
+                ? <><Loader2 size={14} className="animate-spin" /> Creating…</>
+                : 'Create group'}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* ── Join a group ── */}

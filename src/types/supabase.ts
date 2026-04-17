@@ -15,20 +15,50 @@ export interface Database {
     Tables: {
       profiles: {
         Row: {
-          id:         string;
-          full_name:  string | null;
-          avatar_url: string | null;
-          created_at: string;
+          id:                  string;
+          full_name:           string | null;
+          avatar_url:          string | null;
+          venmo_handle:        string | null;
+          cashapp_handle:      string | null;
+          zelle_handle:        string | null;
+          default_currency:    string;
+          show_email:          boolean;
+          show_activity:       boolean;
+          created_at:          string;
+          stripe_customer_id:  string | null;
+          subscription_status: string | null;
+          is_pro:              boolean;
+          price_id:            string | null;
         };
         Insert: {
-          id:          string;
-          full_name?:  string | null;
-          avatar_url?: string | null;
-          created_at?: string;
+          id:                   string;
+          full_name?:           string | null;
+          avatar_url?:          string | null;
+          venmo_handle?:        string | null;
+          cashapp_handle?:      string | null;
+          zelle_handle?:        string | null;
+          default_currency?:    string;
+          show_email?:          boolean;
+          show_activity?:       boolean;
+          created_at?:          string;
+          stripe_customer_id?:  string | null;
+          subscription_status?: string | null;
+          is_pro?:              boolean;
+          price_id?:            string | null;
         };
         Update: {
-          full_name?:  string | null;
-          avatar_url?: string | null;
+          full_name?:           string | null;
+          avatar_url?:          string | null;
+          venmo_handle?:        string | null;
+          cashapp_handle?:      string | null;
+          zelle_handle?:        string | null;
+          default_currency?:    string;
+          show_email?:          boolean;
+          show_activity?:       boolean;
+          stripe_customer_id?:  string | null;
+          subscription_status?: string | null;
+          is_pro?:              boolean;
+          price_id?:            string | null;
         };
         Relationships: [];
       };
@@ -171,6 +201,44 @@ export interface Database {
         };
         Relationships: [];
       };
+
+      activity_logs: {
+        Row: {
+          id:             string;
+          group_id:       string;
+          user_id:        string | null;
+          actor_id:       string | null;
+          target_id:      string | null;
+          expense_id:     string | null;
+          participant_id: string | null;
+          amount:         number | null;
+          action_type:    string | null;
+          is_settled:     boolean | null;
+          message:        string;
+          created_at:     string;
+        };
+        Insert: {
+          id?:             string;
+          group_id:        string;
+          user_id?:        string | null;
+          actor_id?:       string | null;
+          target_id?:      string | null;
+          expense_id?:     string | null;
+          participant_id?: string | null;
+          amount?:         number | null;
+          action_type?:    string | null;
+          is_settled?:     boolean | null;
+          message:         string;
+          created_at?:     string;
+        };
+        Update: {
+          message?:        string;
+          action_type?:    string | null;
+          amount?:         number | null;
+          is_settled?:     boolean | null;
+        };
+        Relationships: [];
+      };
     };
 
     Views: { [_ in never]: never };
@@ -199,6 +267,19 @@ export interface Database {
         Args:    { p_group_id: string };
         Returns: { debtor: string; creditor: string; amount: number }[];
       };
+      log_activity: {
+        Args: {
+          p_group_id:        string;
+          p_message:         string;
+          p_action_type?:    string | null;
+          p_expense_id?:     string | null;
+          p_target_id?:      string | null;
+          p_amount?:         number | null;
+          p_participant_id?: string | null;
+          p_is_settled?:     boolean | null;
+        };
+        Returns: void;
+      };
       is_group_member: {
         Args:    { p_group_id: string };
         Returns: boolean;
@@ -209,6 +290,18 @@ export interface Database {
       };
       update_member_role: {
         Args:    { p_group_id: string; p_target_user_id: string; p_new_role: 'admin' | 'editor' | 'viewer' };
+        Returns: void;
+      };
+      leave_group: {
+        Args:    { p_group_id: string };
+        Returns: void;
+      };
+      delete_group_permanently: {
+        Args:    { p_group_id: string };
+        Returns: void;
+      };
+      delete_own_account: {
+        Args:    Record<string, never>;
         Returns: void;
       };
     };
