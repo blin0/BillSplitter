@@ -20,7 +20,7 @@ function makeId() {
 const smallInputCls = 'rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs px-2.5 py-1.5 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500';
 
 export default function ExpenseForm({ participants, onAdd }: Props) {
-  const { currency, symbol, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
+  const { currency, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
 
   const [description, setDescription]         = useState('');
   const [amount, setAmount]                   = useState('');
