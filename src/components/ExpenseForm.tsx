@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { PlusCircle, RefreshCw, ArrowRight, Pencil, Check, X, CheckCircle2, ChevronDown, Percent, Banknote, Minus as MinusIcon, Plus as PlusIcon } from 'lucide-react';
 import type { Expense, Participant, Split } from '../types';
 import { cn } from '../lib/cn';
-import { round2 } from '../utils/calculations';
+import { round2, round4 } from '../utils/calculations';
 import { useCurrency, EXPENSE_CURRENCIES } from '../context/CurrencyContext';
 import CurrencySelect from './CurrencySelect';
 import DescriptionComboBox from './DescriptionComboBox';
@@ -17,7 +17,7 @@ function makeId() {
   return Math.random().toString(36).slice(2);
 }
 
-const smallInputCls = 'rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500';
+const smallInputCls = 'rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs px-2.5 py-1.5 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500';
 
 export default function ExpenseForm({ participants, onAdd }: Props) {
   const { currency, symbol, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
@@ -84,12 +84,15 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
 
   const effectiveLockedRate: number = (() => {
     if (!isForeign) return 1;
-    if (isManualRate && manualRateValue > 0) return round2(1 / manualRateValue);
-    return round2(convert(1, sourceCurrency, currency));
+    if (isManualRate && manualRateValue > 0) return round4(1 / manualRateValue);
+    return round4(convert(1, sourceCurrency, currency));
   })();
 
   /** Subtotal in base currency (before tax/tip) */
   const baseSubtotal = isForeign ? round2(sourceSubtotal * effectiveLockedRate) : sourceSubtotal;
+
+  /** Display symbol for the expense source currency (used in exact split inputs). */
+  const srcSymbol = EXPENSE_CURRENCIES.find(c => c.code === sourceCurrency)?.symbol ?? sourceCurrency;
 
   // Tax & tip
   const taxPercent       = Math.max(0, parseFloat(taxInput) || 0);
@@ -112,13 +115,24 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
     return round2(grandTotalBase / n);
   }
 
-  function exactSumBase(): number {
+  /** Convert a source-currency amount to base currency. */
+  function srcToBase(srcAmt: number): number {
+    return isForeign ? round2(srcAmt * effectiveLockedRate) : srcAmt;
+  }
+
+  /** Sum of exact amounts as entered — always in sourceCurrency. Used for validation and footer display. */
+  function exactSumSource(): number {
     return round2(involvedList.reduce((s, p) => s + (parseFloat(exactAmounts[p.id] || '0') || 0), 0));
+  }
+
+  /** Sum of exact amounts converted to base currency (for buildSplits proportions). */
+  function exactSumBase(): number {
+    return round2(involvedList.reduce((s, p) => s + srcToBase(parseFloat(exactAmounts[p.id] || '0') || 0), 0));
   }
 
   // ── Manual rate helpers ───────────────────────────────────────────────────
   function openManualRate() {
-    const previewRate = round2(convert(1, currency, sourceCurrency));
+    const previewRate = round4(convert(1, currency, sourceCurrency));
     setManualRateInput(previewRate > 0 ? String(previewRate) : '');
     setIsManualRate(true);
   }
@@ -163,14 +177,15 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
       );
     } else {
       // Manual subtotal amounts; distribute tax+tip proportionally
+      // Amounts entered in sourceCurrency — convert each to base for share calculation
       const subtotalSum = round2(involvedList.reduce(
-        (s, p) => s + (parseFloat(exactAmounts[p.id] || '0') || 0), 0
+        (s, p) => s + srcToBase(parseFloat(exactAmounts[p.id] || '0') || 0), 0
       ));
       if (subtotalSum <= 0) return null;
 
       let allocated = 0;
       shares = involvedList.map((p, i) => {
-        const subtotalShare = round2(parseFloat(exactAmounts[p.id] || '0'));
+        const subtotalShare = srcToBase(round2(parseFloat(exactAmounts[p.id] || '0')));
         if (i === n - 1) {
           return round2(lockedGrandTotal - allocated);
         }
@@ -214,9 +229,9 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
     const lockedGrandTotal   = round2(lockedBaseSubtotal + lockedTaxBase + lockedTipBase);
 
     if (splitType === 'exact') {
-      const sum = exactSumBase();
-      if (Math.abs(sum - baseSubtotal) > 0.01) {
-        setError(`Manual amounts must sum to ${formatPrice(baseSubtotal)} subtotal (currently ${formatPrice(sum)}).`);
+      const sum = exactSumSource();
+      if (Math.abs(sum - sourceSubtotal) > 0.01) {
+        setError(`Manual amounts must sum to ${sourceSubtotal.toFixed(2)} ${sourceCurrency} (currently ${sum.toFixed(2)} ${sourceCurrency}).`);
         return;
       }
     }
@@ -273,8 +288,12 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
             shake && 'animate-[shake_0.4s_ease-in-out] border-red-400 dark:border-red-500'
           )}
         >
-          {/* Top row: [Currency] | [Amount −/+] | [Paid By] */}
-          <div className="flex items-stretch">
+          {/* Top row: on mobile → [Currency | Amount] stacked above [Paid By]
+                        on sm+   → [Currency] | [Amount] | [Paid By] in one row */}
+          <div className="flex flex-col sm:flex-row items-stretch">
+
+            {/* Currency + Amount sub-row (always together) */}
+            <div className="flex flex-1 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
@@ -330,20 +349,21 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                 <PlusIcon size={13} />
               </button>
             </div>
+            </div>{/* end Currency+Amount sub-row */}
 
-            {/* Vertical divider */}
-            <div className="w-px bg-gray-200 dark:bg-slate-700 self-stretch" />
+            {/* Responsive divider: horizontal on mobile, vertical on sm+ */}
+            <div className="sm:w-px h-px sm:h-auto bg-gray-200 dark:bg-slate-700 self-stretch" />
 
-            {/* Paid By — embedded; panel also anchors to this container */}
+            {/* Paid By — full width on mobile, flex-1 on sm+ */}
             <ParticipantSelect
               participants={participants}
               value={paidBy}
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-1 min-w-0"
+              className="w-full sm:flex-1 sm:min-w-0"
             />
-          </div>
+          </div>{/* end top row */}
 
           {/* Horizontal divider */}
           <div className="h-px bg-gray-200 dark:bg-slate-700" />
@@ -403,7 +423,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 text-xs text-violet-800 dark:text-violet-300">
                 <span className="font-medium shrink-0">1 {currency} =</span>
                 <input
-                  type="number" min="0" step="any" value={manualRateInput} autoFocus
+                  type="number" min="0" step="0.0001" value={manualRateInput} autoFocus
                   onChange={e => setManualRateInput(e.target.value)} placeholder="e.g. 7.20"
                   className="w-24 rounded border border-violet-300 dark:border-violet-700 px-2 py-1 text-sm font-medium bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-400"
                 />
@@ -629,19 +649,26 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                     </div>
 
                     {splitType === 'exact' && isInvolved && (
-                      <div className="mt-1 relative" onClick={e => e.stopPropagation()}>
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs pointer-events-none">
-                          {symbol}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={exactAmounts[p.id] ?? ''}
-                          onChange={e => setExactAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder="0.00"
-                          className="w-full rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 pl-6 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500"
-                        />
+                      <div className="mt-1 space-y-0.5" onClick={e => e.stopPropagation()}>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs pointer-events-none opacity-50">
+                            {srcSymbol}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={exactAmounts[p.id] ?? ''}
+                            onChange={e => setExactAmounts(prev => ({ ...prev, [p.id]: e.target.value }))}
+                            placeholder="0.00"
+                            className="w-full rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 px-7 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500"
+                          />
+                        </div>
+                        {isForeign && (parseFloat(exactAmounts[p.id] || '0') || 0) > 0 && (
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">
+                            ≈ {formatPrice(srcToBase(parseFloat(exactAmounts[p.id] || '0') || 0))}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -649,24 +676,31 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               })}
             </div>
 
-            {/* Exact split total footer — validates against subtotal only */}
+            {/* Exact split total footer — validates in source currency */}
             {splitType === 'exact' && involvedList.length > 0 && (
-              <div className="mt-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700 flex justify-between items-center">
-                <span className="text-xs text-gray-500 dark:text-slate-400">
-                  {hasFees ? 'Subtotal assigned' : 'Total assigned'}
-                </span>
-                <span className={cn('text-xs font-semibold',
-                  Math.abs(exactSumBase() - baseSubtotal) < 0.01 && baseSubtotal > 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-500 dark:text-red-400')}>
-                  {formatPrice(exactSumBase())} / {formatPrice(baseSubtotal)}
-                  {Math.abs(exactSumBase() - baseSubtotal) < 0.01 && baseSubtotal > 0 && ' ✓'}
-                </span>
+              <div className="mt-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    {hasFees ? 'Subtotal assigned' : 'Total assigned'}
+                  </span>
+                  <span className={cn('text-xs font-semibold',
+                    Math.abs(exactSumSource() - sourceSubtotal) < 0.01 && sourceSubtotal > 0
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-500 dark:text-red-400')}>
+                    {exactSumSource().toFixed(2)} / {sourceSubtotal.toFixed(2)} {sourceCurrency}
+                    {Math.abs(exactSumSource() - sourceSubtotal) < 0.01 && sourceSubtotal > 0 && ' ✓'}
+                  </span>
+                </div>
+                {isForeign && exactSumBase() > 0 && (
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 text-right">
+                    ≈ {formatPrice(exactSumBase())} {currency} total
+                  </p>
+                )}
               </div>
             )}
 
             {/* Exact + fees: show what each person will actually owe after proportional tax/tip */}
-            {splitType === 'exact' && hasFees && involvedList.length > 0 && Math.abs(exactSumBase() - baseSubtotal) < 0.01 && baseSubtotal > 0 && (
+            {splitType === 'exact' && hasFees && involvedList.length > 0 && Math.abs(exactSumSource() - sourceSubtotal) < 0.01 && sourceSubtotal > 0 && (
               <div className="mt-1 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-100 dark:border-violet-900/40">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400 mb-1">
                   Final owed (subtotal + tax + tip)
@@ -695,9 +729,16 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
         >
           <PlusCircle size={16} />
-          {grandTotalBase > 0
-            ? `Add Expense (${formatPrice(grandTotalBase)})`
-            : 'Add Expense'}
+          <span className="flex flex-col items-center leading-tight">
+            <span>
+              {sourceSubtotal > 0
+                ? `Add Expense (${sourceSubtotal.toFixed(2)} ${sourceCurrency})`
+                : 'Add Expense'}
+            </span>
+            {isForeign && grandTotalBase > 0 && (
+              <span className="text-[11px] font-normal opacity-75">≈ {formatPrice(grandTotalBase)}</span>
+            )}
+          </span>
         </button>
       </div>
     </div>

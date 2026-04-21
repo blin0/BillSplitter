@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Loader2, Check, Camera, Globe, BarChart3, Sparkles, Crown, Zap, Infinity } from 'lucide-react';
+import { Save, Loader2, Check, Camera, Globe, BarChart3, Sparkles, X as XIcon, Crown } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
@@ -8,7 +8,7 @@ import {
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
 import { useSubscription } from '../hooks/useSubscription';
-import { STRIPE_PRICES } from '../lib/stripe-prices';
+import { STRIPE_PRICES, tierForPrice } from '../lib/stripe-prices';
 
 interface Props {
   authEmail: string | null;
@@ -61,7 +61,7 @@ function FloatingInput({
       'relative flex items-center rounded-xl border transition-colors',
       readOnly
         ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/50'
-        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-1 focus-within:ring-violet-300/40',
+        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500 focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-1 focus-within:ring-violet-300/40',
     )}>
       {icon && <span className="pl-3 shrink-0">{icon}</span>}
       {prefix && (
@@ -371,8 +371,9 @@ export default function Profile({ authEmail, authName, userId }: Props) {
   }
 
   const subscription = useSubscription();
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null); // priceId being processed
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError,   setCheckoutError  ] = useState<string | null>(null);
+  const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
 
   async function handleUpgrade(priceId: string) {
     setCheckoutLoading(priceId);
@@ -519,80 +520,284 @@ export default function Profile({ authEmail, authName, userId }: Props) {
               icon={<Sparkles size={15} className="text-violet-500" />}
             >
               {subscription.loading ? (
-                <div className="flex justify-center py-4">
+                <div className="flex justify-center py-6">
                   <Loader2 size={18} className="animate-spin text-gray-400" />
                 </div>
-              ) : subscription.isPro ? (
-                /* ── Active Pro badge ── */
-                <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 border border-violet-200 dark:border-violet-800/50">
-                  <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/40 shrink-0">
-                    <Crown size={16} className="text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Pro Member</p>
-                    <p className="text-xs text-violet-500 dark:text-violet-400 capitalize">
-                      {subscription.subscriptionStatus ?? 'active'}
-                      {subscription.priceId === STRIPE_PRICES.LIFETIME ? ' · Lifetime' : ' · Monthly'}
-                    </p>
-                  </div>
-                  <span className="shrink-0 px-2 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold uppercase tracking-wide">
-                    PRO
-                  </span>
-                </div>
               ) : (
-                /* ── Upgrade plan cards ── */
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    Free plan: up to 3 groups. Upgrade for unlimited groups and future Pro features.
-                  </p>
-                  {checkoutError && (
-                    <p className="text-xs text-red-500 dark:text-red-400 px-1">{checkoutError}</p>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Plus Monthly */}
-                    <div className="relative flex flex-col gap-2 p-4 rounded-xl border-2 border-violet-200 dark:border-violet-800/60 bg-violet-50 dark:bg-violet-950/20">
-                      <div className="flex items-center gap-2">
-                        <Zap size={15} className="text-violet-600 dark:text-violet-400 shrink-0" />
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">Plus</span>
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-slate-100 leading-none">
-                        $4.99<span className="text-sm font-normal text-gray-400 dark:text-slate-500">/mo</span>
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 flex-1">Unlimited groups, cancel any time.</p>
+                <div className="space-y-6">
+
+                  {/* ── Billing cycle toggle ── */}
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center p-1 rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
                       <button
-                        onClick={() => handleUpgrade(STRIPE_PRICES.PLUS_MONTHLY)}
-                        disabled={checkoutLoading === STRIPE_PRICES.PLUS_MONTHLY}
-                        className="mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:brightness-110 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        type="button"
+                        onClick={() => setBillingCycle('monthly')}
+                        className={cn(
+                          'px-4 py-1.5 rounded-lg text-sm font-medium transition-all',
+                          billingCycle === 'monthly'
+                            ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm'
+                            : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200',
+                        )}
                       >
-                        {checkoutLoading === STRIPE_PRICES.PLUS_MONTHLY
-                          ? <><Loader2 size={12} className="animate-spin" /> Opening…</>
-                          : 'Subscribe'}
+                        Monthly
                       </button>
-                    </div>
-                    {/* Lifetime */}
-                    <div className="relative flex flex-col gap-2 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/20">
-                      <div className="absolute -top-2.5 left-3">
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wide">Best value</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Infinity size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">Lifetime</span>
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-slate-100 leading-none">
-                        $49<span className="text-sm font-normal text-gray-400 dark:text-slate-500"> once</span>
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 flex-1">Pay once, own it forever.</p>
                       <button
-                        onClick={() => handleUpgrade(STRIPE_PRICES.LIFETIME)}
-                        disabled={checkoutLoading === STRIPE_PRICES.LIFETIME}
-                        className="mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:brightness-110 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        type="button"
+                        onClick={() => setBillingCycle('yearly')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all',
+                          billingCycle === 'yearly'
+                            ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm'
+                            : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200',
+                        )}
                       >
-                        {checkoutLoading === STRIPE_PRICES.LIFETIME
-                          ? <><Loader2 size={12} className="animate-spin" /> Opening…</>
-                          : 'Buy lifetime'}
+                        Yearly
+                        <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold leading-none">
+                          Save 20%
+                        </span>
                       </button>
                     </div>
                   </div>
+
+                  {/* ── Error ── */}
+                  {checkoutError && (
+                    <p className="text-xs text-red-500 dark:text-red-400 text-center">{checkoutError}</p>
+                  )}
+
+                  {/* ── 3-tier grid ── */}
+                  {(() => {
+                    const currentTier = subscription.isPro
+                      ? tierForPrice(subscription.priceId)
+                      : 'free';
+
+                    const proPrice    = billingCycle === 'yearly' ? STRIPE_PRICES.PRO_YEARLY     : STRIPE_PRICES.PRO_MONTHLY;
+                    const premierPrice = billingCycle === 'yearly' ? STRIPE_PRICES.PREMIER_YEARLY : STRIPE_PRICES.PREMIER_MONTHLY;
+
+                    // ── Reusable feature row ──────────────────────────────────
+                    function FeatureItem({ text, available = true, dark = false }: { text: string; available?: boolean; dark?: boolean }) {
+                      return (
+                        <li className="flex items-start gap-2">
+                          {available ? (
+                            <Check size={13} className="text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
+                          ) : (
+                            <XIcon size={13} className="text-gray-300 dark:text-slate-600 mt-0.5 shrink-0" />
+                          )}
+                          <span className={cn(
+                            'text-xs leading-relaxed',
+                            dark
+                              ? available ? 'text-slate-200' : 'text-slate-500'
+                              : available ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 dark:text-slate-600',
+                          )}>
+                            {text.startsWith('Unlimited') ? <strong className="font-bold">{text}</strong> : text}
+                          </span>
+                        </li>
+                      );
+                    }
+
+                    // ── Tier card ─────────────────────────────────────────────
+                    type TierCardProps = {
+                      tier:         'free' | 'pro' | 'premier';
+                      name:         string;
+                      monthlyPrice: string;
+                      yearlyMonthly: string;
+                      yearlyTotal:  string;
+                      features:     { text: string; available?: boolean }[];
+                      priceId:      string | null;
+                      popular?:     boolean;
+                      dark?:        boolean;
+                    };
+
+                    function TierCard({
+                      tier, name, monthlyPrice, yearlyMonthly, yearlyTotal,
+                      features, priceId, popular = false, dark = false,
+                    }: TierCardProps) {
+                      const isCurrent  = currentTier === tier;
+                      const isComingSoon = !!priceId && priceId.startsWith('price_TODO');
+                      const isLoading  = !!priceId && checkoutLoading === priceId;
+                      const displayPrice = billingCycle === 'yearly' ? yearlyMonthly : monthlyPrice;
+                      const isFree     = tier === 'free';
+
+                      const cardInner = (
+                        <div className={cn(
+                          'relative flex flex-col rounded-[22px] p-5 transition-all h-full',
+                          tier === 'premier'
+                            ? 'bg-white dark:bg-gradient-to-br dark:from-[#1c1d28] dark:to-[#12131a]'
+                            : popular
+                              ? 'border-2 border-violet-500 dark:border-violet-500 bg-white dark:bg-slate-900/50'
+                              : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50',
+                        )}>
+                          {/* Current badge */}
+                          {isCurrent && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shadow-md">
+                                Current plan
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Tier name + badge */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className={cn(
+                              'text-xs font-bold uppercase tracking-widest',
+                              tier === 'premier' ? 'text-violet-600 dark:text-amber-400'
+                                : popular ? 'text-violet-500 dark:text-violet-400'
+                                : 'text-gray-400 dark:text-slate-500',
+                            )}>
+                              {name}
+                            </p>
+                            {tier === 'premier' && (
+                              <Crown size={12} className="text-violet-600 dark:text-amber-400 shrink-0" />
+                            )}
+                            {popular && (
+                              <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+                                Most popular
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Price */}
+                          <div className="mb-1">
+                            {isFree ? (
+                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
+                                Free
+                              </p>
+                            ) : (
+                              <>
+                                <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
+                                  {displayPrice}
+                                  <span className="text-sm font-normal text-gray-400 dark:text-slate-500">/mo</span>
+                                </p>
+                                {billingCycle === 'yearly' && (
+                                  <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
+                                    Billed as {yearlyTotal}/year
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+
+                          {/* Features */}
+                          <ul className="mt-4 mb-5 space-y-2 flex-1">
+                            {features.map((f, i) => (
+                              <FeatureItem key={i} text={f.text} available={f.available ?? true} dark={dark} />
+                            ))}
+                          </ul>
+
+                          {/* CTA button */}
+                          {isCurrent ? (
+                            <button
+                              disabled
+                              className="w-full py-2 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 cursor-not-allowed"
+                            >
+                              Current plan
+                            </button>
+                          ) : isFree ? (
+                            <button
+                              disabled
+                              className="w-full py-2 rounded-xl text-sm font-semibold bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700 cursor-not-allowed"
+                            >
+                              Free forever
+                            </button>
+                          ) : isComingSoon ? (
+                            <button
+                              disabled
+                              className="w-full py-2 rounded-xl text-sm font-semibold bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-dashed border-gray-300 dark:border-slate-600 cursor-not-allowed"
+                            >
+                              Coming soon
+                            </button>
+                          ) : popular ? (
+                            <button
+                              onClick={() => priceId && handleUpgrade(priceId)}
+                              disabled={isLoading || !priceId}
+                              className={cn(
+                                'w-full py-2 rounded-xl text-sm font-bold text-white text-center transition-all',
+                                'bg-gradient-to-r from-purple-500 via-pink-400 to-amber-300',
+                                'hover:from-purple-600 hover:via-pink-500 hover:to-amber-400',
+                                'shadow-inner active:scale-95 hover:scale-[1.02]',
+                                'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
+                              )}
+                            >
+                              {isLoading
+                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Opening…</span>
+                                : currentTier === 'free' ? 'Upgrade' : 'Switch plan'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => priceId && handleUpgrade(priceId)}
+                              disabled={isLoading || !priceId}
+                              className={cn(
+                                'w-full py-2 rounded-xl text-sm font-bold text-white text-center transition-all',
+                                'bg-gradient-to-r from-amber-400 via-orange-400 to-pink-500',
+                                'hover:from-amber-500 hover:via-orange-500 hover:to-pink-600',
+                                'shadow-inner active:scale-95 hover:scale-[1.02]',
+                                'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
+                              )}
+                            >
+                              {isLoading
+                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Opening…</span>
+                                : currentTier === 'free' ? 'Upgrade' : 'Switch plan'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                      return tier === 'premier' ? (
+                        <div className="p-[2px] rounded-2xl bg-gradient-to-br from-amber-400 via-fuchsia-500 to-violet-600 shadow-[0_0_30px_-10px_rgba(168,85,247,0.25)] dark:shadow-[0_0_60px_-15px_rgba(168,85,247,0.7)]">
+                          {cardInner}
+                        </div>
+                      ) : cardInner;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
+                        <TierCard
+                          tier="free"
+                          name="Free"
+                          monthlyPrice="$0"
+                          yearlyMonthly="$0"
+                          yearlyTotal="$0"
+                          priceId={null}
+                          features={[
+                            { text: '3 groups' },
+                            { text: 'Limit of 4 members per group' },
+                            { text: '90 expenses / month' },
+                            { text: 'Smart Settle' },
+                            { text: 'Priority support', available: false },
+                          ]}
+                        />
+                        <TierCard
+                          tier="pro"
+                          name="Pro"
+                          monthlyPrice="$4.99"
+                          yearlyMonthly="$3.99"
+                          yearlyTotal="$47.88"
+                          priceId={proPrice}
+                          popular
+                          features={[
+                            { text: '8 groups' },
+                            { text: 'Limit of 12 members per group' },
+                            { text: 'Unlimited expenses' },
+                            { text: 'Smart Settle enabled' },
+                            { text: 'Priority support', available: false },
+                          ]}
+                        />
+                        <TierCard
+                          tier="premier"
+                          name="Premier"
+                          monthlyPrice="$9.99"
+                          yearlyMonthly="$7.99"
+                          yearlyTotal="$95.88"
+                          priceId={premierPrice}
+                          features={[
+                            { text: 'Unlimited groups' },
+                            { text: 'Unlimited group members' },
+                            { text: 'Unlimited expenses' },
+                            { text: 'Smart Settle enabled' },
+                            { text: 'Priority support' },
+                          ]}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </Section>

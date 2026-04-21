@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X, UserCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { Expense, Participant } from './types';
 import {
@@ -24,6 +25,7 @@ import GroupSidebar from './components/GroupSidebar';
 import GroupActions from './components/GroupActions';
 import ActivityLog from './components/ActivityLog';
 import Profile from './pages/Profile';
+import ProtectedRoute from './components/ProtectedRoute';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
   fetchUserGroups,
@@ -85,15 +87,84 @@ function useTheme() {
   return { dark, mounted, toggle };
 }
 
+// ─── UserAvatar ───────────────────────────────────────────────────────────────
+// Shows the user's profile picture, falling back to a coloured initial circle
+// if the URL is absent or the image fails to load.
+
+interface UserAvatarProps {
+  src:      string | null;
+  initial:  string;
+  onClick?: () => void;
+  size?:    'sm' | 'md';
+}
+
+function UserAvatar({ src, initial, onClick, size = 'sm' }: UserAvatarProps) {
+  const [imgError, setImgError] = useState(false);
+  const dim = size === 'sm' ? 'w-7 h-7' : 'w-8 h-8';
+
+  const sharedCls = `${dim} rounded-full shrink-0 select-none transition-all hover:ring-2 hover:ring-violet-400/60 hover:ring-offset-1 dark:hover:ring-offset-slate-900`;
+
+  if (src && !imgError) {
+    return (
+      <button type="button" onClick={onClick} className={sharedCls}>
+        <img
+          src={src}
+          alt={initial}
+          onError={() => setImgError(true)}
+          className="w-full h-full rounded-full object-cover border border-slate-200 dark:border-slate-700"
+        />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${sharedCls} bg-violet-600 flex items-center justify-center text-white text-xs font-semibold`}
+    >
+      {initial}
+    </button>
+  );
+}
+
+// ─── GroupRouteSync ───────────────────────────────────────────────────────────
+// Rendered inside the /group/:groupId route — syncs the URL param → activeGroupId.
+
+interface GroupRouteSyncProps {
+  groups:        GroupInfo[];
+  activeGroupId: string | null;
+  groupsLoading: boolean;
+  onSync:        (id: string) => void;
+}
+
+function GroupRouteSync({ groups, activeGroupId, groupsLoading, onSync }: GroupRouteSyncProps) {
+  const { groupId } = useParams<{ groupId: string }>();
+
+  useEffect(() => {
+    if (!groupId || groupsLoading) return;
+    if (groups.some(g => g.id === groupId) && groupId !== activeGroupId) {
+      onSync(groupId);
+    }
+  }, [groupId, groups, groupsLoading, activeGroupId, onSync]);
+
+  return null;
+}
+
 // ─── AppInner ─────────────────────────────────────────────────────────────────
 
 function AppInner() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { dark, mounted, toggle } = useTheme();
   const { setCurrency } = useCurrency();
-  const [showSignIn,   setShowSignIn  ] = useState(false);
-  const [sidebarOpen,  setSidebarOpen ] = useState(false);
-  const [currentPage,  setCurrentPage ] = useState<'app' | 'profile'>('app');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [showSignIn,        setShowSignIn       ] = useState(false);
+  const [sidebarOpen,       setSidebarOpen      ] = useState(false);
+  const [profileAvatar,     setProfileAvatar    ] = useState<string | null>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+
+  const isProfilePage = location.pathname === '/profile';
 
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
@@ -131,14 +202,22 @@ function AppInner() {
     setDbExpenses,
   );
 
-  // Sync default_currency from profile on sign-in
+  // Sync profile data (currency, avatar, display name) on sign-in; clear on sign-out
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setProfileAvatar(null);
+      setProfileDisplayName(null);
+      return;
+    }
     fetchOwnProfile().then(({ data }) => {
-      if (!data?.defaultCurrency) return;
+      if (!data) return;
       if (data.defaultCurrency in CURRENCIES) {
         setCurrency(data.defaultCurrency as CurrencyCode);
       }
+      // Profile table avatar takes priority; fall back to OAuth metadata avatar
+      setProfileAvatar(data.avatarUrl ?? user.user_metadata?.avatar_url ?? null);
+      // Profile table fullName is the user-chosen display name ("nickname")
+      setProfileDisplayName(data.fullName ?? null);
     });
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -160,8 +239,12 @@ function AppInner() {
       const list = data ?? [];
       setGroups(list);
       if (list.length > 0) {
-        const saved   = loadActiveGroup();
-        const restore = list.find(g => g.id === saved);
+        // Prefer the group from the URL (if we're on /group/:id), then localStorage
+        const urlMatch = location.pathname.match(/^\/group\/([^/]+)/);
+        const urlGroupId = urlMatch?.[1] ?? null;
+        const fromUrl    = urlGroupId ? list.find(g => g.id === urlGroupId) : null;
+        const saved      = loadActiveGroup();
+        const restore    = fromUrl ?? list.find(g => g.id === saved);
         setActiveGroupId((restore ?? list[0]).id);
       } else {
         setActiveGroupId(null);
@@ -170,13 +253,9 @@ function AppInner() {
     });
 
     return () => { cancelled = true; };
-  }, [user?.id]); // only re-run when the actual user ID changes, not on token refresh
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Unified channel for all changes to the current user's own membership rows.
-  // Server-side filter (user_id=eq.${user.id}) is evaluated against the OLD row
-  // for DELETE events (requires REPLICA IDENTITY FULL, which is set). This avoids
-  // the RLS timing problem where is_group_member() returns false post-deletion and
-  // silently drops events on unfiltered subscriptions.
+  // Channel: current user's membership changes (removed, role change)
   useEffect(() => {
     if (!user) return;
 
@@ -208,6 +287,12 @@ function AppInner() {
           });
           setDbParticipants([]);
           setDbExpenses([]);
+
+          // Navigate away from the removed group
+          if (activeGroupId === removedGroupId) {
+            const nextId = remaining[0]?.id ?? null;
+            navigate(nextId ? `/group/${nextId}` : '/dashboard', { replace: true });
+          }
         },
       )
       .on(
@@ -226,7 +311,7 @@ function AppInner() {
 
           if (!oldRole || newRole === oldRole) return;
 
-          const promoted = (ROLE_RANK[newRole] ?? 0) > (ROLE_RANK[oldRole] ?? 0);
+          const promoted  = (ROLE_RANK[newRole] ?? 0) > (ROLE_RANK[oldRole] ?? 0);
           const roleLabel = newRole.charAt(0).toUpperCase() + newRole.slice(1);
           const noticeId  = makeId();
 
@@ -243,7 +328,7 @@ function AppInner() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notify existing members when someone new joins the active group
   useEffect(() => {
@@ -266,12 +351,9 @@ function AppInner() {
             .eq('id', newMember.user_id)
             .single();
 
-          const name = profile?.full_name ?? 'Someone';
+          const name     = profile?.full_name ?? 'Someone';
           const noticeId = makeId();
-          setJoinNotices(prev => [...prev, {
-            id:   noticeId,
-            text: `${name} has joined ${groupName}`,
-          }]);
+          setJoinNotices(prev => [...prev, { id: noticeId, text: `${name} has joined ${groupName}` }]);
           setTimeout(() => {
             setJoinNotices(prev => prev.filter(n => n.id !== noticeId));
           }, 8000);
@@ -280,7 +362,7 @@ function AppInner() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, activeGroupId]);
+  }, [user?.id, activeGroupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load participants + expenses when active group changes
   useEffect(() => {
@@ -317,16 +399,18 @@ function AppInner() {
 
   // ── Group management ───────────────────────────────────────────────────────
 
+  const handleGroupSyncRef = useRef<(id: string) => void>(() => {});
+
   function handleSelectGroup(id: string) {
     setActiveGroupId(id);
     saveActiveGroup(id);
     setSidebarOpen(false);
-    setCurrentPage('app');
+    navigate(`/group/${id}`);
   }
 
   function handleGroupAdded(group: GroupInfo) {
     setGroups(prev => {
-      if (prev.find(g => g.id === group.id)) return prev; // already in list (re-join)
+      if (prev.find(g => g.id === group.id)) return prev;
       return [...prev, group];
     });
     handleSelectGroup(group.id);
@@ -337,24 +421,32 @@ function AppInner() {
   }
 
   function handleGroupLeft(groupId: string) {
-    setGroups(prev => {
-      const remaining = prev.filter(g => g.id !== groupId);
-      // If we left the active group, switch to the next available one
-      if (activeGroupId === groupId) {
-        const next = remaining[0]?.id ?? null;
-        setActiveGroupId(next);
-        if (next) saveActiveGroup(next);
-        setDbParticipants([]);
-        setDbExpenses([]);
+    const remaining = groups.filter(g => g.id !== groupId);
+    setGroups(remaining);
+    if (activeGroupId === groupId) {
+      const next = remaining[0]?.id ?? null;
+      setActiveGroupId(next);
+      if (next) {
+        saveActiveGroup(next);
+        navigate(`/group/${next}`, { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
       }
-      return remaining;
-    });
+      setDbParticipants([]);
+      setDbExpenses([]);
+    }
   }
 
   function handleGroupDeleted(groupId: string) {
-    // Same as leaving — remove from list and clear state
     handleGroupLeft(groupId);
   }
+
+  // Keep a stable ref so GroupRouteSync can call it without re-subscribing
+  handleGroupSyncRef.current = (id: string) => {
+    setActiveGroupId(id);
+    saveActiveGroup(id);
+  };
+  const stableGroupSync = useCallback((id: string) => handleGroupSyncRef.current(id), []);
 
   // ── Participant handlers ───────────────────────────────────────────────────
 
@@ -393,8 +485,8 @@ function AppInner() {
         actionType:    'EXPENSE_ADDED',
         expenseId:     newId,
         amount:        expense.totalAmount,
-        participantId: expense.paidBy,   // payer = the group member this is "for"
-        isSettled:     false,            // brand-new expense is never settled
+        participantId: expense.paidBy,
+        isSettled:     false,
         message:       expense.description,
       });
     } else {
@@ -413,9 +505,9 @@ function AppInner() {
         void logActivity({
           groupId:       activeGroupId,
           actionType:    'EXPENSE_DELETED',
-          expenseId:     null,           // already deleted — can't keep FK
+          expenseId:     null,
           amount:        found.totalAmount,
-          participantId: found.paidBy,   // original payer
+          participantId: found.paidBy,
           isSettled:     wasSettled,
           message:       found.description,
         });
@@ -516,7 +608,7 @@ function AppInner() {
         groupId:       activeGroupId,
         actionType:    'SETTLEMENT_MADE',
         amount,
-        participantId: from,               // the member who paid
+        participantId: from,
         message:       `settled for ${nameOf(from)} → ${nameOf(to)}`,
       });
     }
@@ -533,7 +625,7 @@ function AppInner() {
         groupId:       activeGroupId,
         actionType:    'SETTLEMENT_MADE',
         amount,
-        participantId: from,               // the member who paid
+        participantId: from,
         message:       `settled for ${nameOf(from)} → ${nameOf(to)}`,
       });
     }
@@ -555,12 +647,11 @@ function AppInner() {
     );
   }
 
-  // ── Signed-in: no groups yet → show create/join prompt ────────────────────
   const noGroups = isSignedIn && !groupsLoading && groups.length === 0;
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="relative flex w-full max-w-full overflow-x-hidden min-h-screen bg-gray-50 dark:bg-slate-950">
 
       {/* Sidebar — only when signed in */}
       {isSignedIn && (
@@ -575,13 +666,15 @@ function AppInner() {
           onGroupRenamed={handleGroupRenamed}
           onGroupLeft={handleGroupLeft}
           onGroupDeleted={handleGroupDeleted}
-          onOpenProfile={() => setCurrentPage('profile')}
-          currentPage={currentPage}
+          onOpenProfile={() => navigate('/profile')}
         />
       )}
 
       {/* Main area */}
-      <div className={isSignedIn ? 'flex-1 min-w-0 lg:ml-64' : 'flex-1 min-w-0'}>
+      <div className={isSignedIn
+        ? 'flex-1 min-w-0 w-full max-w-full overflow-x-hidden lg:ml-64'
+        : 'flex-1 min-w-0 w-full max-w-full overflow-x-hidden'
+      }>
 
         {/* ── Unified header — always visible ── */}
         <header className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
@@ -598,20 +691,20 @@ function AppInner() {
               </button>
             )}
 
-            {/* Logo + title — clicking navigates back when on the profile page */}
+            {/* Logo + title — clicking back on the profile page goes to dashboard */}
             <div
               className={`flex items-center gap-2 flex-1 min-w-0${
-                currentPage === 'profile' && isSignedIn
+                isProfilePage && isSignedIn
                   ? ' cursor-pointer rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors -ml-1 px-1 py-0.5'
                   : ''
               }`}
-              onClick={currentPage === 'profile' && isSignedIn ? () => setCurrentPage('app') : undefined}
-              role={currentPage === 'profile' && isSignedIn ? 'button' : undefined}
-              tabIndex={currentPage === 'profile' && isSignedIn ? 0 : undefined}
-              onKeyDown={currentPage === 'profile' && isSignedIn
-                ? (e) => { if (e.key === 'Enter' || e.key === ' ') setCurrentPage('app'); }
+              onClick={isProfilePage && isSignedIn ? () => navigate(-1) : undefined}
+              role={isProfilePage && isSignedIn ? 'button' : undefined}
+              tabIndex={isProfilePage && isSignedIn ? 0 : undefined}
+              onKeyDown={isProfilePage && isSignedIn
+                ? (e) => { if (e.key === 'Enter' || e.key === ' ') navigate(-1); }
                 : undefined}
-              aria-label={currentPage === 'profile' && isSignedIn ? 'Back to dashboard' : undefined}
+              aria-label={isProfilePage && isSignedIn ? 'Back to dashboard' : undefined}
             >
               <div className="p-2 bg-violet-600 rounded-xl shrink-0">
                 <Receipt size={20} className="text-white" />
@@ -621,7 +714,7 @@ function AppInner() {
                 <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-none">
                   BillSplitter
                 </h1>
-                {currentPage === 'profile' && isSignedIn ? (
+                {isProfilePage && isSignedIn ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500">Profile</p>
                 ) : isSignedIn && activeGroupId ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500 truncate">
@@ -647,19 +740,18 @@ function AppInner() {
 
             {isSignedIn ? (
               <div className="flex items-center gap-2">
+                <UserAvatar
+                  src={profileAvatar}
+                  initial={(profileDisplayName ?? user.user_metadata?.full_name ?? 'U')[0].toUpperCase()}
+                  onClick={() => navigate('/profile')}
+                />
                 <button
-                  onClick={() => setCurrentPage('profile')}
-                  title="View profile"
-                  className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 select-none hover:ring-2 hover:ring-violet-400 hover:ring-offset-1 dark:hover:ring-offset-slate-900 transition-all"
+                  onClick={() => navigate('/profile')}
+                  className="hidden sm:flex items-center text-sm text-gray-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-[140px] truncate"
                 >
-                  {(user.user_metadata?.full_name ?? user.email ?? '?')[0].toUpperCase()}
-                </button>
-                <button
-                  onClick={() => setCurrentPage('profile')}
-                  className="hidden sm:flex items-center gap-1 text-sm text-gray-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-[120px] truncate"
-                >
-                  <UserCircle size={13} className="shrink-0" />
-                  <span className="truncate">{user.user_metadata?.full_name ?? user.email}</span>
+                  <span className="truncate">
+                    {profileDisplayName || user.user_metadata?.full_name || 'User'}
+                  </span>
                 </button>
                 <button
                   onClick={signOut}
@@ -680,198 +772,222 @@ function AppInner() {
           </div>
         </header>
 
-        {/* ── Page content ── */}
-        {currentPage === 'profile' && isSignedIn ? (
-          <Profile
-            authEmail={user?.email ?? null}
-            authName={user?.user_metadata?.full_name ?? null}
-            userId={user?.id ?? null}
-          />
-        ) : (<>
+        {/* ── Routes — handles redirects, group-param sync, and profile page ── */}
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        <OfflineBanner />
+          {/* Sync /group/:groupId URL param → activeGroupId state */}
+          <Route path="/group/:groupId" element={
+            <GroupRouteSync
+              groups={groups}
+              activeGroupId={activeGroupId}
+              groupsLoading={groupsLoading}
+              onSync={stableGroupSync}
+            />
+          } />
 
-        {/* ── Member-joined + role-change notices ── */}
-        {(joinNotices.length > 0 || roleNotices.length > 0) && (
-          <div className="flex flex-col gap-2 px-4 pt-3">
-            {joinNotices.map(notice => (
-              <div
-                key={notice.id}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <p className="flex-1 text-sm text-emerald-800 dark:text-emerald-300">{notice.text}</p>
-                <button
-                  onClick={() => setJoinNotices(prev => prev.filter(n => n.id !== notice.id))}
-                  className="shrink-0 p-0.5 rounded text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 transition-colors"
-                  aria-label="Dismiss"
+          {/* Protected profile page */}
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile
+                authEmail={user?.email ?? null}
+                authName={user?.user_metadata?.full_name ?? null}
+                userId={user?.id ?? null}
+              />
+            </ProtectedRoute>
+          } />
+        </Routes>
+
+        {/* ── Dashboard content — visible for all non-profile routes ── */}
+        {!isProfilePage && (<>
+
+          <OfflineBanner />
+
+          {/* ── Member-joined + role-change notices ── */}
+          {(joinNotices.length > 0 || roleNotices.length > 0) && (
+            <div className="flex flex-col gap-2 px-4 pt-3">
+              {joinNotices.map(notice => (
+                <div
+                  key={notice.id}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50"
                 >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
-            {roleNotices.map(notice => (
-              <div
-                key={notice.id}
-                className={notice.promoted
-                  ? 'flex items-center gap-3 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50'
-                  : 'flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50'
-                }
-              >
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${notice.promoted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <p className={`flex-1 text-sm ${notice.promoted ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}`}>
-                  {notice.text}
-                </p>
-                <button
-                  onClick={() => setRoleNotices(prev => prev.filter(n => n.id !== notice.id))}
-                  className={`shrink-0 p-0.5 rounded transition-colors ${notice.promoted ? 'text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200' : 'text-amber-500 hover:text-amber-700 dark:hover:text-amber-200'}`}
-                  aria-label="Dismiss"
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <p className="flex-1 text-sm text-emerald-800 dark:text-emerald-300">{notice.text}</p>
+                  <button
+                    onClick={() => setJoinNotices(prev => prev.filter(n => n.id !== notice.id))}
+                    className="shrink-0 p-0.5 rounded text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              {roleNotices.map(notice => (
+                <div
+                  key={notice.id}
+                  className={notice.promoted
+                    ? 'flex items-center gap-3 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50'
+                    : 'flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50'
+                  }
                 >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Removed-from-group toast ── */}
-        {removedNotice && (
-          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-lg max-w-sm w-[calc(100%-2rem)] bg-gray-900 dark:bg-slate-700 text-white">
-            <div className="shrink-0 p-1.5 rounded-lg bg-red-500/20">
-              <UserX size={15} className="text-red-400" />
-            </div>
-            <p className="flex-1 text-sm leading-snug">
-              You were removed from{' '}
-              <span className="font-semibold">{removedNotice}</span>.
-            </p>
-            <button
-              onClick={() => setRemovedNotice(null)}
-              className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-white transition-colors"
-              aria-label="Dismiss"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* ── No-groups prompt ── */}
-        {noGroups && (
-          <div className="flex items-center justify-center min-h-[calc(100vh-73px)] px-4">
-            <div className="w-full max-w-sm">
-              <div className="text-center mb-6">
-                <div className="inline-flex p-4 rounded-2xl bg-violet-50 dark:bg-violet-900/20 mb-4">
-                  <Users size={32} className="text-violet-500" />
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${notice.promoted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <p className={`flex-1 text-sm ${notice.promoted ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}`}>
+                    {notice.text}
+                  </p>
+                  <button
+                    onClick={() => setRoleNotices(prev => prev.filter(n => n.id !== notice.id))}
+                    className={`shrink-0 p-0.5 rounded transition-colors ${notice.promoted ? 'text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200' : 'text-amber-500 hover:text-amber-700 dark:hover:text-amber-200'}`}
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">
-                  Welcome to BillSplitter
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-slate-400">
-                  Create a group to get started, or join one with a code.
-                </p>
-              </div>
-              <GroupActions onCreated={handleGroupAdded} onJoined={handleGroupAdded} onUpgrade={() => setCurrentPage('profile')} />
+              ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── Loading spinner (data fetch for active group) ── */}
-        {isSignedIn && dbLoading && !noGroups && (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 size={28} className="animate-spin text-violet-500" />
-          </div>
-        )}
+          {/* ── Removed-from-group toast ── */}
+          {removedNotice && (
+            <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-lg max-w-sm w-[calc(100%-2rem)] bg-gray-900 dark:bg-slate-700 text-white">
+              <div className="shrink-0 p-1.5 rounded-lg bg-red-500/20">
+                <UserX size={15} className="text-red-400" />
+              </div>
+              <p className="flex-1 text-sm leading-snug">
+                You were removed from{' '}
+                <span className="font-semibold">{removedNotice}</span>.
+              </p>
+              <button
+                onClick={() => setRemovedNotice(null)}
+                className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-white transition-colors"
+                aria-label="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
-        {/* ── Main app content ── */}
-        {(!isSignedIn || (activeGroupId && !dbLoading)) && !noGroups && (
-          <main className="max-w-6xl mx-auto px-4 py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-              {/* ── Left column ── */}
-              <div className="space-y-5 lg:col-start-1">
-                <div className="order-1">
-                  <ParticipantInput
-                    participants={participants}
-                    balances={balances}
-                    onAdd={addParticipant}
-                    onRemove={removeParticipant}
-                    readOnly={isSignedIn && isViewer}
-                  />
+          {/* ── No-groups prompt ── */}
+          {noGroups && (
+            <div className="flex items-center justify-center min-h-[calc(100vh-73px)] px-4">
+              <div className="w-full max-w-sm">
+                <div className="text-center mb-6">
+                  <div className="inline-flex p-4 rounded-2xl bg-violet-50 dark:bg-violet-900/20 mb-4">
+                    <Users size={32} className="text-violet-500" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">
+                    Welcome to BillSplitter
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
+                    Create a group to get started, or join one with a code.
+                  </p>
                 </div>
-                <div className="order-2">
-                  {isSignedIn && isViewer ? (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6 flex items-start gap-4">
-                      <div className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 shrink-0">
-                        <EyeOff size={18} className="text-gray-400 dark:text-slate-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-0.5">
-                          View-only access
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-slate-500 leading-snug">
-                          You can see all expenses but cannot add or delete them. Ask a group admin or editor to change your role.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <ExpenseForm
+                <GroupActions
+                  onCreated={handleGroupAdded}
+                  onJoined={handleGroupAdded}
+                  onUpgrade={() => navigate('/profile')}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Loading spinner (data fetch for active group) ── */}
+          {isSignedIn && dbLoading && !noGroups && (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 size={28} className="animate-spin text-violet-500" />
+            </div>
+          )}
+
+          {/* ── Main app content ── */}
+          {(!isSignedIn || (activeGroupId && !dbLoading)) && !noGroups && (
+            <main className="max-w-6xl mx-auto px-4 py-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                {/* ── Left column ── */}
+                <div className="space-y-5 lg:col-start-1">
+                  <div className="order-1">
+                    <ParticipantInput
                       participants={participants}
-                      onAdd={addExpense}
+                      balances={balances}
+                      onAdd={addParticipant}
+                      onRemove={removeParticipant}
+                      readOnly={isSignedIn && isViewer}
                     />
+                  </div>
+                  <div className="order-2">
+                    {isSignedIn && isViewer ? (
+                      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6 flex items-start gap-4">
+                        <div className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 shrink-0">
+                          <EyeOff size={18} className="text-gray-400 dark:text-slate-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-0.5">
+                            View-only access
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-slate-500 leading-snug">
+                            You can see all expenses but cannot add or delete them. Ask a group admin or editor to change your role.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <ExpenseForm
+                        participants={participants}
+                        onAdd={addExpense}
+                      />
+                    )}
+                  </div>
+                  <div className="order-5">
+                    <ExpenseList
+                      expenses={expenses}
+                      participants={participants}
+                      onRemove={removeExpense}
+                      onToggleHighlight={toggleHighlight}
+                      onSelectAllUnsettled={selectAllUnsettled}
+                      readOnly={isSignedIn && isViewer}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Right column ── */}
+                <div className="space-y-5 lg:col-start-2">
+                  <div className="order-3">
+                    <Dashboard
+                      participants={participants}
+                      balances={balances}
+                      totalSpending={total}
+                      settlements={settlements}
+                      expenses={expenses}
+                    />
+                  </div>
+                  <div className="order-4">
+                    <SettlementAdvice
+                      settlements={settlements}
+                      participants={participants}
+                      onSettle={settleGlobal}
+                      readOnly={isSignedIn && isViewer}
+                      groupId={activeGroupId ?? undefined}
+                      groupName={groups.find(g => g.id === activeGroupId)?.name}
+                    />
+                  </div>
+                  <div className="order-6">
+                    <SelectiveSummary
+                      selectedDebts={selectedDebts}
+                      participants={participants}
+                      highlightedCount={highlighted.length}
+                      onSettle={settleDebt}
+                      readOnly={isSignedIn && isViewer}
+                      groupId={activeGroupId ?? undefined}
+                      groupName={groups.find(g => g.id === activeGroupId)?.name}
+                    />
+                  </div>
+                  {isSignedIn && activeGroupId && (
+                    <div className="order-7">
+                      <ActivityLog groupId={activeGroupId} />
+                    </div>
                   )}
                 </div>
-                <div className="order-5">
-                  <ExpenseList
-                    expenses={expenses}
-                    participants={participants}
-                    onRemove={removeExpense}
-                    onToggleHighlight={toggleHighlight}
-                    onSelectAllUnsettled={selectAllUnsettled}
-                    readOnly={isSignedIn && isViewer}
-                  />
-                </div>
               </div>
-
-              {/* ── Right column ── */}
-              <div className="space-y-5 lg:col-start-2">
-                <div className="order-3">
-                  <Dashboard
-                    participants={participants}
-                    balances={balances}
-                    totalSpending={total}
-                    settlements={settlements}
-                    expenses={expenses}
-                  />
-                </div>
-                <div className="order-4">
-                  <SettlementAdvice
-                    settlements={settlements}
-                    participants={participants}
-                    onSettle={settleGlobal}
-                    readOnly={isSignedIn && isViewer}
-                    groupId={activeGroupId ?? undefined}
-                    groupName={groups.find(g => g.id === activeGroupId)?.name}
-                  />
-                </div>
-                <div className="order-6">
-                  <SelectiveSummary
-                    selectedDebts={selectedDebts}
-                    participants={participants}
-                    highlightedCount={highlighted.length}
-                    onSettle={settleDebt}
-                    readOnly={isSignedIn && isViewer}
-                    groupId={activeGroupId ?? undefined}
-                    groupName={groups.find(g => g.id === activeGroupId)?.name}
-                  />
-                </div>
-                {isSignedIn && activeGroupId && (
-                  <div className="order-7">
-                    <ActivityLog groupId={activeGroupId} />
-                  </div>
-                )}
-              </div>
-            </div>
-          </main>
-        )}
+            </main>
+          )}
         </>)}
       </div>
 
