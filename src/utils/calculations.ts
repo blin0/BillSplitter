@@ -1,8 +1,13 @@
 import type { Expense, Participant, Settlement } from '../types';
 
-/** Round to 2 decimal places to avoid floating-point drift */
+/** Round to 2 decimal places — use for money amounts */
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Round to 4 decimal places — use for exchange rates to preserve API granularity */
+export function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
 }
 
 /**

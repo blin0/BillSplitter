@@ -121,7 +121,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
               value={createName}
               onChange={e => setCreateName(e.target.value)}
               maxLength={60}
-              className="w-full px-3 py-2 rounded-xl text-sm bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full px-3 py-2 rounded-xl text-sm bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
             {createError && (
               <p className="text-xs text-red-500 dark:text-red-400">{createError}</p>
@@ -151,7 +151,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
         </div>
 
         <form onSubmit={handleJoin} className="space-y-2.5">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
             <Hash size={14} className="text-gray-400 dark:text-slate-500 shrink-0" />
             <input
               type="text"

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { FALLBACK_RATES } from '../constants/fallbackRates';
+import { fetchLiveRates } from '../lib/currency';
 
 // ─── Base currencies (group display) ─────────────────────────────────────────
 
@@ -120,9 +121,8 @@ export type RatesSource = 'live' | 'stale-cache' | 'fallback';
 
 // ─── Exchange rate cache ──────────────────────────────────────────────────────
 
-const RATES_CACHE_KEY  = 'billsplitter_rates_v1';
-const RATES_CACHE_TTL  = 24 * 60 * 60 * 1000; // 24 hours
-const FETCH_TIMEOUT_MS = 10_000;
+const RATES_CACHE_KEY = 'billsplitter_rates_v1';
+const RATES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 interface RatesCache { timestamp: number; rates: Record<string, number> }
 
@@ -138,19 +138,6 @@ function readCachedRates(ignoreTTL = false): Record<string, number> | null {
 
 function writeCachedRates(rates: Record<string, number>) {
   localStorage.setItem(RATES_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), rates }));
-}
-
-async function fetchLiveRates(): Promise<Record<string, number>> {
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch('https://api.frankfurter.dev/v2/latest', { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data: { rates: Record<string, number> } = await res.json();
-    return { EUR: 1, ...data.rates };
-  } finally {
-    clearTimeout(timeoutId);
-  }
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────

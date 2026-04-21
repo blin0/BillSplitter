@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User } from 'lucide-react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock } from 'lucide-react';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, leaveGroup, deleteGroupPermanently } from '../lib/db';
-import GroupActions from './GroupActions';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, createGroup, joinGroupByCode } from '../lib/db';
+import { useSubscription } from '../hooks/useSubscription';
 import ConfirmModal from './ui/ConfirmModal';
 
 interface Props {
@@ -21,8 +22,6 @@ interface Props {
   onGroupDeleted: (groupId: string) => void;
   /** Navigate to the Profile page */
   onOpenProfile:  () => void;
-  /** Which page is currently active */
-  currentPage?:   'app' | 'profile';
 }
 
 // ─── Role metadata ────────────────────────────────────────────────────────────
@@ -205,8 +204,9 @@ export default function GroupSidebar({
   onGroupLeft,
   onGroupDeleted,
   onOpenProfile,
-  currentPage = 'app',
 }: Props) {
+  const location     = useLocation();
+  const isProfilePage = location.pathname === '/profile';
   const [copied,          setCopied         ] = useState(false);
   const [groupsOpen,      setGroupsOpen     ] = useState(true);   // default expanded
   const [membersOpen,     setMembersOpen    ] = useState(false);
@@ -221,8 +221,20 @@ export default function GroupSidebar({
   const [confirmError,    setConfirmError   ] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  const activeGroup = groups.find(g => g.id === activeGroupId);
-  const isAdmin     = activeGroup?.role === 'admin';
+  // ── Add / Join group state ────────────────────────────────────────────────
+  const [addJoinOpen,   setAddJoinOpen  ] = useState(false);
+  const [createName,    setCreateName   ] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError,   setCreateError  ] = useState<string | null>(null);
+  const [blocked,       setBlocked      ] = useState(false);
+  const [joinCode,      setJoinCode     ] = useState('');
+  const [joinLoading,   setJoinLoading  ] = useState(false);
+  const [joinError,     setJoinError    ] = useState<string | null>(null);
+
+  const activeGroup  = groups.find(g => g.id === activeGroupId);
+  const isAdmin      = activeGroup?.role === 'admin';
+  const subscription = useSubscription();
+  const FREE_TIER_GROUP_LIMIT = 3;
 
   // Auto-focus and select the rename input when editing starts
   useEffect(() => {
@@ -303,6 +315,49 @@ export default function GroupSidebar({
     if (error) {
       setRoleError(error);
       setMembers(prev => [...prev, member]);
+    }
+  }
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    const name = createName.trim();
+    if (!name) return;
+    setCreateError(null);
+    setBlocked(false);
+    setCreateLoading(true);
+    if (!subscription.isPro) {
+      const { data: count } = await fetchOwnGroupCount();
+      if ((count ?? 0) >= FREE_TIER_GROUP_LIMIT) {
+        setCreateLoading(false);
+        setBlocked(true);
+        return;
+      }
+    }
+    const { data, error } = await createGroup(name);
+    setCreateLoading(false);
+    if (error || !data) {
+      setCreateError(error ?? 'Something went wrong.');
+    } else {
+      setCreateName('');
+      handleGroupAdded(data);
+      setAddJoinOpen(false);
+    }
+  }
+
+  async function handleJoin(e: FormEvent) {
+    e.preventDefault();
+    const code = joinCode.trim().toUpperCase();
+    if (code.length !== 6) { setJoinError('Code must be exactly 6 characters.'); return; }
+    setJoinError(null);
+    setJoinLoading(true);
+    const { data, error } = await joinGroupByCode(code);
+    setJoinLoading(false);
+    if (error || !data) {
+      setJoinError(error ?? 'Something went wrong.');
+    } else {
+      setJoinCode('');
+      handleGroupAdded(data);
+      setAddJoinOpen(false);
     }
   }
 
@@ -436,7 +491,7 @@ export default function GroupSidebar({
                           title={isAdminOfGroup ? 'Double-click to rename' : undefined}
                           className={cn(
                             'w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors',
-                            group.id === activeGroupId && currentPage === 'app'
+                            group.id === activeGroupId && !isProfilePage
                               ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium'
                               : 'text-gray-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/60',
                           )}
@@ -448,7 +503,7 @@ export default function GroupSidebar({
                           )}>
                             {group.role.charAt(0).toUpperCase() + group.role.slice(1)}
                           </span>
-                          {group.id === activeGroupId && currentPage === 'app' && (
+                          {group.id === activeGroupId && !isProfilePage && (
                             <ChevronRight size={13} className="shrink-0 text-violet-400 dark:text-violet-500" />
                           )}
                         </button>
@@ -587,18 +642,98 @@ export default function GroupSidebar({
           )}
 
           {/* ── Divider ── */}
-          <div className="mx-3 my-4 border-t border-gray-100 dark:border-slate-800" />
+          <div className="mx-3 my-2 border-t border-gray-100 dark:border-slate-800" />
 
-          {/* ── Create / Join ── */}
-          <div className="px-3 pb-6">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-3">
-              Add a group
-            </p>
-            <GroupActions
-              onCreated={handleGroupAdded}
-              onJoined={handleGroupAdded}
-              onUpgrade={() => { onOpenProfile(); onClose(); }}
-            />
+          {/* ── Add / Join Group collapsible ── */}
+          <div className="p-2 pb-4">
+            <button
+              type="button"
+              onClick={() => setAddJoinOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <Plus size={14} className="shrink-0" />
+              <span className="flex-1 text-left font-medium">Add / Join Group</span>
+              <ChevronDown
+                size={14}
+                className={cn('shrink-0 transition-transform duration-300', addJoinOpen && 'rotate-180')}
+              />
+            </button>
+
+            <div className={cn(
+              'overflow-hidden transition-all duration-300',
+              addJoinOpen ? 'max-h-[500px] opacity-100 mt-1' : 'max-h-0 opacity-0',
+            )}>
+              <div className="rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
+                {blocked ? (
+                  <div className="p-3 space-y-2.5">
+                    <div className="flex items-start gap-2">
+                      <Lock size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200">Free plan limit reached</p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">Upgrade to Pro for more groups.</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setBlocked(false); onOpenProfile(); onClose(); }}
+                      className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-xs font-semibold rounded-lg py-1.5 transition-all"
+                    >
+                      <Sparkles size={12} /> Upgrade to Pro
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* ── Create New ── */}
+                    <form onSubmit={handleCreate} className="p-3 space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Create New</p>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Japan Trip 2025"
+                        value={createName}
+                        onChange={e => setCreateName(e.target.value)}
+                        maxLength={60}
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      />
+                      {createError && <p className="text-[11px] text-red-500 dark:text-red-400">{createError}</p>}
+                      <button
+                        type="submit"
+                        disabled={createLoading || !createName.trim()}
+                        className="w-full flex items-center justify-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg py-1.5 transition-colors"
+                      >
+                        {createLoading ? <><Loader2 size={12} className="animate-spin" /> Creating…</> : 'Create group'}
+                      </button>
+                    </form>
+
+                    <div className="mx-3 border-t border-gray-200 dark:border-slate-700" />
+
+                    {/* ── Join Existing ── */}
+                    <form onSubmit={handleJoin} className="p-3 space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Join Existing</p>
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
+                        <Hash size={12} className="text-gray-400 dark:text-slate-500 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="6-digit code"
+                          value={joinCode}
+                          onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+                          maxLength={6}
+                          className="flex-1 bg-transparent text-xs text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 outline-none font-mono tracking-widest uppercase"
+                        />
+                      </div>
+                      {joinError && <p className="text-[11px] text-red-500 dark:text-red-400">{joinError}</p>}
+                      <button
+                        type="submit"
+                        disabled={joinLoading || joinCode.trim().length !== 6}
+                        className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg py-1.5 transition-colors"
+                      >
+                        {joinLoading ? <><Loader2 size={12} className="animate-spin" /> Joining…</> : 'Join group'}
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
         </div>
@@ -610,7 +745,7 @@ export default function GroupSidebar({
             onClick={() => { onOpenProfile(); onClose(); }}
             className={cn(
               'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
-              currentPage === 'profile'
+              isProfilePage
                 ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-semibold'
                 : 'text-gray-600 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-700 dark:hover:text-violet-300',
             )}

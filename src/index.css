@@ -4,6 +4,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent horizontal overflow globally */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Ensure padding/border never add to element widths */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* Hide native number-input spinners globally */
 input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {
@@ -28,6 +39,34 @@ input[type='number'] {
   60%      { transform: translateX(4px); }
   75%      { transform: translateX(-2px); }
   90%      { transform: translateX(2px); }
+}
+
+@keyframes spin-gradient {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Animated conic-gradient border — wraps a button */
+.animate-gradient-border {
+  position: relative;
+  border-radius: 0.75rem; /* rounded-xl */
+  overflow: hidden;
+  padding: 2px;
+}
+
+.animate-gradient-border::before {
+  content: '';
+  position: absolute;
+  /* Square large enough to fill any corner when rotating */
+  aspect-ratio: 1;
+  width: 200%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  background: conic-gradient(from 0deg, #a855f7, #ec4899, #ef4444, #a855f7);
+  animation: spin-gradient 3s linear infinite;
+  /* Don't let the global transition override the animation */
+  transition: none;
 }
 
 @layer base {

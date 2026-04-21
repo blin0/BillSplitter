@@ -117,7 +117,7 @@ export default function DescriptionComboBox({ value, onChange, nextRef, onCommit
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative w-full max-w-full" ref={containerRef}>
       {/* ── Input ── */}
       <div className="relative">
         <input
