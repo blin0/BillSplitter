@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       {/* Suspense boundary for i18next lazy-loaded translation files */}
       <Suspense fallback={
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
           <div className="w-6 h-6 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
         </div>
       }>

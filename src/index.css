@@ -14,6 +14,43 @@ html {
 html, body {
   overflow-x: hidden;
   max-width: 100%;
+  /* Prevent rubber-band scroll from exposing the browser's white canvas beneath */
+  overscroll-behavior-y: contain;
+}
+
+/* ── Explicit backgrounds — set before JS hydrates so there is zero white
+   flash during scroll repaints in Dark Mode. The inline <script> in
+   index.html already adds/removes the `dark` class synchronously, so these
+   rules take effect on the very first paint.                               ── */
+body,
+#root {
+  background-color: rgb(249, 250, 251); /* gray-50  — light mode */
+}
+
+html.dark body,
+html.dark #root {
+  background-color: rgb(2, 6, 23);      /* slate-950 — dark mode */
+}
+
+/* ── GPU compositing — applied to the Analytics page and bento cards to
+   prevent "paint lag" during chart rendering and dark-mode scrolling.      ── */
+.gpu-layer {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Paint containment — isolates repaints to within a card/widget so that
+   Recharts SVG animations don't cascade to the rest of the document.       ── */
+.contain-paint {
+  contain: paint;
+}
+
+/* Native-feel momentum scroll for any overflow-y container on iOS/Android */
+.overflow-y-auto,
+.overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Animated mesh gradient blobs ─────────────────────────────────────────── */

@@ -413,7 +413,7 @@ function WidgetDonut({ expenses, fmt, loading }: {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col shadow-sm"
+      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col shadow-sm contain-paint gpu-layer"
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -top-10 -left-10 w-44 h-44 rounded-full bg-violet-600/12 blur-3xl" />
@@ -566,7 +566,7 @@ function WidgetSavings({ expenses, fmt, loading }: {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col gap-3 shadow-sm"
+      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col gap-3 shadow-sm contain-paint gpu-layer"
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-emerald-500/8 blur-3xl" />
@@ -739,7 +739,7 @@ function WidgetPeer({ participants, expenses, fmt, loading }: {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col gap-4 h-full shadow-sm"
+      className="relative overflow-hidden rounded-2xl border p-5 flex flex-col gap-4 h-full shadow-sm contain-paint gpu-layer"
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       {tipPortal}
@@ -1047,7 +1047,7 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border p-5 shadow-sm"
+      className="relative overflow-hidden rounded-2xl border p-5 shadow-sm contain-paint gpu-layer"
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -bottom-10 left-1/3 w-64 h-20 bg-violet-600/10 blur-3xl" />
@@ -1228,7 +1228,7 @@ export default function Analytics({ groups }: Props) {
   }
 
   return (
-    <div className="min-h-[calc(100vh-73px)] bg-gray-50 dark:bg-slate-950">
+    <div className="min-h-[calc(100dvh-73px)] bg-gray-50 dark:bg-slate-950 gpu-layer overscroll-y-contain">
 
       {/* ── Header ── */}
       <div className="border-b border-gray-100 dark:border-slate-800">

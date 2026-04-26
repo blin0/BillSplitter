@@ -709,7 +709,7 @@ function AppInner() {
   // ── Auth-loading spinner ───────────────────────────────────────────────────
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
         <Loader2 size={28} className="animate-spin text-violet-500" />
       </div>
     );
@@ -717,7 +717,7 @@ function AppInner() {
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
-    <div className="relative flex w-full max-w-full overflow-x-hidden min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="relative flex w-full max-w-full overflow-x-hidden min-h-[100dvh] bg-gray-50 dark:bg-slate-950 overscroll-y-contain">
 
       {/* Sidebar — only when signed in */}
       {isSignedIn && (
@@ -946,7 +946,7 @@ function AppInner() {
 
           {/* ── No-groups welcome state ── */}
           {noGroups && (
-            <div className="flex items-center justify-center min-h-[calc(100vh-73px)] px-4 py-12">
+            <div className="flex items-center justify-center min-h-[calc(100dvh-73px)] px-4 py-12">
               <div className="w-full max-w-md">
 
                 {/* Hero icon + headline */}
