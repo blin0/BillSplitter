@@ -1,0 +1,70 @@
+{
+  "title": "تجزیہ",
+  "summary": "خلاصہ",
+  "group": "گروپ",
+  "selectGroup": "گروپ منتخب کریں",
+  "noGroups": "تجزیہ دیکھنے کے لیے گروپ بنائیں یا جوائن کریں۔",
+  "cat": {
+    "Dining": "کھانا",
+    "Coffee": "کافی",
+    "Groceries": "گروسری",
+    "Travel": "سفر",
+    "Bills": "بل",
+    "Misc": "دیگر",
+    "Tax": "ٹیکس",
+    "Tip": "ٹپ"
+  },
+  "donut": {
+    "title": "زمرے",
+    "total": "کل",
+    "noExpenses": "ابھی تک کوئی خرچ نہیں",
+    "insightTop": "آپ کا سب سے بڑا زمرہ {{cat}} ہے، جو کل خرچ کا {{pct}}% ہے۔",
+    "insightNone": "زمرے کی تفصیل دیکھنے کے لیے اخراجات شامل کریں۔"
+  },
+  "savings": {
+    "title": "درست کُل",
+    "tracked": "ٹریک کیا",
+    "tax": "ٹیکس",
+    "tips": "ٹپ",
+    "insight": "آپ نے ٹیکس اور ٹپ میں {{amount}} ٹریک کیا — کل خرچ کا {{pct}}%۔",
+    "acrossExpenses_one": "{{count}} خرچ میں ٹیکس/ٹپ کے ساتھ",
+    "acrossExpenses_other": "{{count}} اخراجات میں ٹیکس/ٹپ کے ساتھ"
+  },
+  "peer": {
+    "title": "ارکان کی گتیشیلتا",
+    "debtFlow": "قرض کا بہاؤ",
+    "totalSpent": "کل خرچ",
+    "noParticipants": "ابھی تک کوئی شرکاء نہیں",
+    "whoPaysWho": "کون کسے دیتا ہے",
+    "morePayments_one": "+{{count}} مزید ادائیگی",
+    "morePayments_other": "+{{count}} مزید ادائیگیاں",
+    "noSpending": "کوئی خرچ نہیں",
+    "isOwed": "وصول کرنا ہے",
+    "owes": "ادا کرنا ہے",
+    "fullySettled": "✓ مکمل تصفیہ",
+    "pctSettled": "{{pct}}% تصفیہ",
+    "splits_one": "{{count}} تقسیم",
+    "splits_other": "{{count}} تقسیمیں",
+    "totalSpentLabel": "کل خرچ:",
+    "pctOfTotal": "% اپنے کُل کا",
+    "insight": "اس نظریے میں {{pct}}% تقسیم مکمل طور پر طے ہو گئی ہیں۔",
+    "insightNone": "گتیشیلتا دیکھنے کے لیے شرکاء شامل کریں۔"
+  },
+  "velocity": {
+    "title": "خرچ کی رفتار",
+    "thirtyDay": "30 دن",
+    "total": "کل",
+    "largeExpenses": "بڑے اخراجات",
+    "fxTitle": "شرح تبادلہ انحراف",
+    "fxDesc_one": "{{count}} خرچ اس دن کی شرح پر غیر ملکی کرنسی میں ریکارڈ کیا گیا۔",
+    "fxDesc_other": "{{count}} اخراجات اس دن کی شرح پر غیر ملکی کرنسیوں میں ریکارڈ کیے گئے۔",
+    "fxSuffix": "آج کی شرح پر تبدیل کرنے پر کُل ہوگا",
+    "fxMore": "لاک کی گئی رقم سے {{amount}} زیادہ۔",
+    "fxLess": "لاک کی گئی رقم سے {{amount}} کم۔",
+    "insight": "پچھلے 30 دنوں کے مقابلے میں خرچ {{dir}} {{pct}}%۔",
+    "up": "بڑھا",
+    "down": "کم ہوا",
+    "insightNone": "رجحان کی گنتی کے لیے کافی تاریخ نہیں۔"
+  },
+  "insightLabel": "ذہین بصیرت"
+}

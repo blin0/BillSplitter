@@ -30,10 +30,11 @@ interface ExpenseMetadata {
 // ─── Group info (used by sidebar / group list) ────────────────────────────────
 
 export interface GroupInfo {
-  id:       string;
-  name:     string;
-  joinCode: string;
-  role:     'admin' | 'editor' | 'viewer';
+  id:             string;
+  name:           string;
+  joinCode:       string;
+  role:           'admin' | 'editor' | 'viewer';
+  defaultTaxRate: number | null;
 }
 
 export interface GroupMemberInfo {
@@ -53,8 +54,10 @@ export interface OwnProfile {
   cashappHandle:      string | null;
   zelleHandle:        string | null;
   defaultCurrency:    string;
+  defaultTaxRate:     number;
   showEmail:          boolean;
   showActivity:       boolean;
+  languagePreference: string | null;
   // Stripe / subscription
   stripeCustomerId:   string | null;
   subscriptionStatus: string | null;
@@ -77,7 +80,7 @@ export async function fetchOwnProfile(): Promise<DbResult<OwnProfile>> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle, default_currency, show_email, show_activity, stripe_customer_id, subscription_status, is_pro, price_id')
+    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle, default_currency, default_tax_rate, show_email, show_activity, language_preference, stripe_customer_id, subscription_status, is_pro, price_id')
     .eq('id', user.id)
     .single();
 
@@ -92,8 +95,10 @@ export async function fetchOwnProfile(): Promise<DbResult<OwnProfile>> {
       cashappHandle:      data.cashapp_handle,
       zelleHandle:        data.zelle_handle ?? null,
       defaultCurrency:    data.default_currency ?? 'USD',
+      defaultTaxRate:     Number(data.default_tax_rate ?? 0),
       showEmail:          data.show_email  ?? true,
       showActivity:       data.show_activity ?? true,
+      languagePreference: data.language_preference ?? null,
       stripeCustomerId:   data.stripe_customer_id ?? null,
       subscriptionStatus: data.subscription_status ?? null,
       isPro:              data.is_pro ?? false,
@@ -104,14 +109,16 @@ export async function fetchOwnProfile(): Promise<DbResult<OwnProfile>> {
 }
 
 export async function updateOwnProfile(updates: {
-  fullName?:        string | null;
-  avatarUrl?:       string | null;
-  venmoHandle?:     string | null;
-  cashappHandle?:   string | null;
-  zelleHandle?:     string | null;
-  defaultCurrency?: string;
-  showEmail?:       boolean;
-  showActivity?:    boolean;
+  fullName?:            string | null;
+  avatarUrl?:           string | null;
+  venmoHandle?:         string | null;
+  cashappHandle?:       string | null;
+  zelleHandle?:         string | null;
+  defaultCurrency?:     string;
+  defaultTaxRate?:      number;
+  showEmail?:           boolean;
+  showActivity?:        boolean;
+  languagePreference?:  string | null;
 }): Promise<DbResult<void>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: 'Not authenticated' };
@@ -125,8 +132,10 @@ export async function updateOwnProfile(updates: {
       ...(updates.cashappHandle   !== undefined && { cashapp_handle:   updates.cashappHandle   }),
       ...(updates.zelleHandle     !== undefined && { zelle_handle:     updates.zelleHandle     }),
       ...(updates.defaultCurrency !== undefined && { default_currency: updates.defaultCurrency }),
-      ...(updates.showEmail       !== undefined && { show_email:       updates.showEmail       }),
-      ...(updates.showActivity    !== undefined && { show_activity:    updates.showActivity    }),
+      ...(updates.defaultTaxRate  !== undefined && { default_tax_rate: updates.defaultTaxRate  }),
+      ...(updates.showEmail            !== undefined && { show_email:           updates.showEmail            }),
+      ...(updates.showActivity         !== undefined && { show_activity:        updates.showActivity         }),
+      ...(updates.languagePreference   !== undefined && { language_preference:  updates.languagePreference   }),
     })
     .eq('id', user.id);
 
@@ -241,7 +250,7 @@ export async function fetchUserGroups(): Promise<DbResult<GroupInfo[]>> {
 
   const { data, error } = await supabase
     .from('members')
-    .select('role, groups(id, name, join_code)')
+    .select('role, groups(id, name, join_code, default_tax_rate)')
     .eq('user_id', user.id);
 
   if (error) return { data: null, error: error.message };
@@ -252,11 +261,11 @@ export async function fetchUserGroups(): Promise<DbResult<GroupInfo[]>> {
   const seen = new Map<string, GroupInfo>();
   for (const row of data ?? []) {
     if (!row.groups) continue;
-    const g = row.groups as { id: string; name: string; join_code: string };
+    const g = row.groups as { id: string; name: string; join_code: string; default_tax_rate: number | null };
     const role = row.role as 'admin' | 'editor' | 'viewer';
     const existing = seen.get(g.id);
     if (!existing || (ROLE_RANK[role] ?? 0) > (ROLE_RANK[existing.role] ?? 0)) {
-      seen.set(g.id, { id: g.id, name: g.name, joinCode: g.join_code, role });
+      seen.set(g.id, { id: g.id, name: g.name, joinCode: g.join_code, role, defaultTaxRate: g.default_tax_rate ?? null });
     }
   }
 
@@ -275,10 +284,11 @@ export async function createGroup(name: string): Promise<DbResult<GroupInfo>> {
 
   return {
     data: {
-      id:       row.id,
-      name:     row.name,
-      joinCode: row.join_code,
-      role:     'admin',
+      id:             row.id,
+      name:           row.name,
+      joinCode:       row.join_code,
+      role:           'admin',
+      defaultTaxRate: null,
     },
     error: null,
   };
@@ -324,6 +334,15 @@ export async function updateGroupName(groupId: string, name: string): Promise<Db
   return { data: null, error: error?.message ?? null };
 }
 
+/** Admin-only: update a group's default tax rate. Pass null to clear. */
+export async function updateGroupTaxRate(groupId: string, rate: number | null): Promise<DbResult<void>> {
+  const { error } = await supabase
+    .from('groups')
+    .update({ default_tax_rate: rate })
+    .eq('id', groupId);
+  return { data: null, error: error?.message ?? null };
+}
+
 /** Join a group by its 6-char code; returns the group info. */
 export async function joinGroupByCode(code: string): Promise<DbResult<GroupInfo>> {
   const { data: groupId, error } = await supabase
@@ -343,20 +362,21 @@ export async function joinGroupByCode(code: string): Promise<DbResult<GroupInfo>
 
   const { data: memberRow, error: mErr } = await supabase
     .from('members')
-    .select('role, groups(id, name, join_code)')
+    .select('role, groups(id, name, join_code, default_tax_rate)')
     .eq('group_id', groupId as string)
     .eq('user_id', user.id)
     .single();
 
   if (mErr) return { data: null, error: mErr.message };
 
-  const g = memberRow.groups as { id: string; name: string; join_code: string };
+  const g = memberRow.groups as { id: string; name: string; join_code: string; default_tax_rate: number | null };
   return {
     data: {
-      id:       g.id,
-      name:     g.name,
-      joinCode: g.join_code,
-      role:     memberRow.role as 'admin' | 'editor' | 'viewer',
+      id:             g.id,
+      name:           g.name,
+      joinCode:       g.join_code,
+      role:           memberRow.role as 'admin' | 'editor' | 'viewer',
+      defaultTaxRate: g.default_tax_rate ?? null,
     },
     error: null,
   };
@@ -481,15 +501,20 @@ export async function fetchExpenses(groupId: string): Promise<DbResult<Expense[]
   if (error) return { data: null, error: error.message };
 
   const expenses: Expense[] = (rows ?? []).map(row => {
-    const meta = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+    const meta  = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+    const payer = row.payer_participant_id ?? '';
 
     type SplitRow = { id: string; participant_id: string | null; amount_owed: number; paid_amount: number; is_paid: boolean | null };
-    const splits: Split[] = ((row.splits as unknown as SplitRow[]) ?? []).map(s => ({
-      participantId: s.participant_id ?? '',
-      share:         Number(s.amount_owed),
-      paidAmount:    Number(s.paid_amount ?? 0),
-      isSettled:     s.is_paid ?? false,
-    }));
+    const splits: Split[] = ((row.splits as unknown as SplitRow[]) ?? []).map(s => {
+      const isPayer = (s.participant_id ?? '') === payer;
+      return {
+        participantId: s.participant_id ?? '',
+        share:         Number(s.amount_owed),
+        // Payer's own share is always settled — they funded the full bill upfront.
+        paidAmount:    isPayer ? Number(s.amount_owed) : Number(s.paid_amount ?? 0),
+        isSettled:     isPayer ? true                  : (s.is_paid ?? false),
+      };
+    });
 
     return {
       id:                   row.id,
@@ -505,6 +530,7 @@ export async function fetchExpenses(groupId: string): Promise<DbResult<Expense[]
       isHighlighted:        false,
       taxPercent:           meta.taxPercent,
       tipSourceAmount:      meta.tipSourceAmount,
+      date:                 row.created_at as string | undefined,
     };
   });
 
@@ -556,14 +582,18 @@ export async function fetchExpenseById(expenseId: string): Promise<DbResult<Expe
 
   if (error) return { data: null, error: error.message };
 
-  const meta = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+  const meta  = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+  const payer = row.payer_participant_id ?? '';
   type SplitRow = { id: string; participant_id: string | null; amount_owed: number; paid_amount: number; is_paid: boolean | null };
-  const splits: Split[] = ((row.splits as unknown as SplitRow[]) ?? []).map(s => ({
-    participantId: s.participant_id ?? '',
-    share:         Number(s.amount_owed),
-    paidAmount:    Number(s.paid_amount ?? 0),
-    isSettled:     s.is_paid ?? false,
-  }));
+  const splits: Split[] = ((row.splits as unknown as SplitRow[]) ?? []).map(s => {
+    const isPayer = (s.participant_id ?? '') === payer;
+    return {
+      participantId: s.participant_id ?? '',
+      share:         Number(s.amount_owed),
+      paidAmount:    isPayer ? Number(s.amount_owed) : Number(s.paid_amount ?? 0),
+      isSettled:     isPayer ? true                  : (s.is_paid ?? false),
+    };
+  });
 
   return {
     data: {
@@ -743,4 +773,27 @@ export async function syncSplitsForExpense(
 
   const firstError = results.find(r => r.error)?.error;
   return { data: null, error: firstError?.message ?? null };
+}
+
+// ─── Feedback ─────────────────────────────────────────────────────────────────
+
+export interface FeedbackPayload {
+  userId:   string | null;
+  email:    string | null;
+  category: string;
+  message:  string;
+}
+
+export async function submitFeedback(payload: FeedbackPayload): Promise<DbResult<void>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('feedback')
+    .insert({
+      user_id:  payload.userId,
+      email:    payload.email,
+      category: payload.category,
+      message:  payload.message,
+    });
+
+  return { data: null, error: error?.message ?? null };
 }

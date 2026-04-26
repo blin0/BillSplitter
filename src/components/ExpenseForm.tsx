@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { PlusCircle, RefreshCw, ArrowRight, Pencil, Check, X, CheckCircle2, ChevronDown, Percent, Banknote, Minus as MinusIcon, Plus as PlusIcon } from 'lucide-react';
 import type { Expense, Participant, Split } from '../types';
 import { cn } from '../lib/cn';
@@ -9,8 +11,10 @@ import DescriptionComboBox from './DescriptionComboBox';
 import ParticipantSelect from './ParticipantSelect';
 
 interface Props {
-  participants: Participant[];
-  onAdd: (expense: Expense) => void;
+  participants:  Participant[];
+  onAdd:         (expense: Expense) => void;
+  groupId?:      string;
+  groupTaxRate?: number | null;
 }
 
 function makeId() {
@@ -19,7 +23,48 @@ function makeId() {
 
 const smallInputCls = 'rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs px-2.5 py-1.5 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:focus:ring-violet-500';
 
-export default function ExpenseForm({ participants, onAdd }: Props) {
+// ── Helpers for reading stored defaults ──────────────────────────────────────
+function getDefaultDesc(userId?: string): string {
+  if (!userId) return '';
+  try {
+    const p = JSON.parse(localStorage.getItem(`bsp_descs_${userId}`) ?? 'null') as { defaultLabel?: string | null } | null;
+    return p?.defaultLabel ?? '';
+  } catch { return ''; }
+}
+
+function getDefaultPaidBy(userId?: string, groupId?: string, parts?: Participant[]): string {
+  if (!userId || !groupId || !parts?.length) return '';
+  try {
+    const p = JSON.parse(localStorage.getItem(`bsp_paidby_${userId}_${groupId}`) ?? 'null') as { defaultId?: string | null } | null;
+    if (p?.defaultId && parts.some(x => x.id === p.defaultId)) return p.defaultId;
+  } catch {}
+  return '';
+}
+
+/** Returns the user's global default tax rate (0 = none set). */
+function getDefaultTaxRate(userId?: string): number {
+  if (!userId) return 0;
+  try {
+    const raw = localStorage.getItem(`bsp_tax_${userId}`);
+    const n = raw !== null ? parseFloat(raw) : 0;
+    return isFinite(n) && n > 0 ? n : 0;
+  } catch { return 0; }
+}
+
+/** Tax inheritance: group → user profile → 0. */
+function getInheritedTax(
+  userId?: string,
+  groupTaxRate?: number | null,
+): { rate: number; source: 'group' | 'user' | null } {
+  if (groupTaxRate != null && groupTaxRate > 0) return { rate: groupTaxRate, source: 'group' };
+  const userRate = getDefaultTaxRate(userId);
+  if (userRate > 0) return { rate: userRate, source: 'user' };
+  return { rate: 0, source: null };
+}
+
+export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate }: Props) {
+  const { user } = useAuth();
+  const { t } = useTranslation();
   const { currency, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
 
   const [description, setDescription]         = useState('');
@@ -36,9 +81,10 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
   const [paidByOpen, setPaidByOpen]           = useState(false);
   const [shake, setShake]                     = useState(false);
   // Tax & Tip
-  const [showFees, setShowFees]               = useState(false);
-  const [taxInput, setTaxInput]               = useState('');
-  const [tipInput, setTipInput]               = useState('');
+  const [showFees,      setShowFees     ] = useState(false);
+  const [taxInput,      setTaxInput     ] = useState('');
+  const [tipInput,      setTipInput     ] = useState('');
+  const [taxHighlight,  setTaxHighlight ] = useState(false);
   const taxRef    = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const longPressRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,6 +123,42 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
   // Auto-focus tax input when section opens
   useEffect(() => { if (showFees) setTimeout(() => taxRef.current?.focus(), 50); }, [showFees]);
 
+  // Apply inherited tax (group → user → 0) when user or group context changes
+  const taxContextKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${user?.id ?? ''}_${groupId ?? ''}_${groupTaxRate ?? ''}`;
+    if (taxContextKey.current === key) return;
+    taxContextKey.current = key;
+    if (!user?.id) return;
+    const { rate } = getInheritedTax(user.id, groupTaxRate);
+    if (rate > 0) {
+      setTaxInput(String(rate));
+      setShowFees(true);
+      setTaxHighlight(true);
+    } else {
+      setTaxInput('');
+      setShowFees(false);
+    }
+  }, [user?.id, groupId, groupTaxRate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply stored default description once when user becomes available
+  const descDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (descDefaultApplied.current || !user?.id || description !== '') return;
+    descDefaultApplied.current = true;
+    const def = getDefaultDesc(user.id);
+    if (def) setDescription(def);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply stored default paidBy once when participants load
+  const paidByDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (paidByDefaultApplied.current || paidBy !== '' || participants.length === 0 || !user?.id || !groupId) return;
+    paidByDefaultApplied.current = true;
+    const def = getDefaultPaidBy(user.id, groupId, participants);
+    if (def) setPaidBy(def);
+  }, [participants.length, user?.id, groupId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Core amounts ──────────────────────────────────────────────────────────
   const sourceSubtotal  = parseFloat(amount) || 0;
   const isForeign       = sourceCurrency !== currency;
@@ -99,6 +181,10 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
   const sourceTip        = Math.max(0, parseFloat(tipInput) || 0);
   const hasFees          = showFees && (taxPercent > 0 || sourceTip > 0);
   const feesDisabled     = baseSubtotal <= 0;
+
+  // Inherited tax metadata (for source label + override indicator)
+  const inheritedTax   = getInheritedTax(user?.id, groupTaxRate);
+  const taxOverridden  = inheritedTax.source !== null && taxPercent !== inheritedTax.rate;
 
   const taxBase          = hasFees ? round2(baseSubtotal * taxPercent / 100) : 0;
   const tipBase          = hasFees ? (isForeign ? round2(sourceTip * effectiveLockedRate) : sourceTip) : 0;
@@ -211,15 +297,15 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
 
   function handleSubmit() {
     setError('');
-    if (!description.trim())       { setError('Please enter a description.'); triggerShake(); return; }
-    if (sourceSubtotal <= 0)       { setError('Amount must be greater than 0.'); triggerShake(); return; }
-    if (!paidBy)                   { setError('Please select who paid.'); triggerShake(); return; }
-    if (n === 0)                   { setError('Select at least one participant.'); return; }
+    if (!description.trim())       { setError(t('expense.errorNoDesc')); triggerShake(); return; }
+    if (sourceSubtotal <= 0)       { setError(t('expense.errorNoAmount')); triggerShake(); return; }
+    if (!paidBy)                   { setError(t('expense.errorNoPayer')); triggerShake(); return; }
+    if (n === 0)                   { setError(t('expense.errorNoParticipants')); return; }
     if (isForeign && ratesLoading && !isManualRate) {
-      setError('Exchange rates are still loading. Wait or set a manual rate.'); return;
+      setError(t('expense.errorRatesLoading')); return;
     }
     if (isForeign && isManualRate && manualRateValue <= 0) {
-      setError('Please enter a valid manual exchange rate.'); return;
+      setError(t('expense.errorInvalidRate')); return;
     }
 
     const lockedRate         = effectiveLockedRate;
@@ -231,13 +317,17 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
     if (splitType === 'exact') {
       const sum = exactSumSource();
       if (Math.abs(sum - sourceSubtotal) > 0.01) {
-        setError(`Manual amounts must sum to ${sourceSubtotal.toFixed(2)} ${sourceCurrency} (currently ${sum.toFixed(2)} ${sourceCurrency}).`);
+        setError(t('expense.errorExactSum', {
+          expected: sourceSubtotal.toFixed(2),
+          got: sum.toFixed(2),
+          currency: sourceCurrency,
+        }));
         return;
       }
     }
 
     const splits = buildSplits(lockedBaseSubtotal, lockedGrandTotal);
-    if (!splits) { setError('Select at least one participant.'); return; }
+    if (!splits) { setError(t('expense.errorNoParticipants')); return; }
 
     onAdd({
       id: makeId(),
@@ -255,16 +345,28 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
       tipSourceAmount: hasFees && sourceTip > 0 ? sourceTip : undefined,
     });
 
-    setDescription(''); setAmount(''); setSourceCurrency(currency); setPaidBy('');
+    setDescription(getDefaultDesc(user?.id));
+    setAmount(''); setSourceCurrency(currency);
+    setPaidBy(getDefaultPaidBy(user?.id, groupId, participants));
     setSplitType('equally'); setInvolved(new Set(participants.map(p => p.id)));
     setExactAmounts({}); setIsManualRate(false); setManualRateInput('');
-    setShowFees(false); setTaxInput(''); setTipInput('');
+    setTipInput('');
+    // Restore inherited tax rate (group → user → 0) after submit
+    const { rate: inheritedRate } = getInheritedTax(user?.id, groupTaxRate);
+    if (inheritedRate > 0) {
+      setTaxInput(String(inheritedRate));
+      setShowFees(true);
+      setTaxHighlight(true);
+    } else {
+      setShowFees(false);
+      setTaxInput('');
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">Add Expense</h2>
+      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">{t('expense.addExpense')}</h2>
 
       <div className="space-y-3">
         <DescriptionComboBox
@@ -272,6 +374,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
           onChange={setDescription}
           nextRef={amountRef}
           onCommit={handleSubmit}
+          storageKey={user?.id}
         />
 
         {/* ── Unified Control Bar ── */}
@@ -327,6 +430,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               <input
                 ref={amountRef}
                 type="number"
+                name="expense-amount"
                 min="0"
                 step="0.01"
                 value={amount}
@@ -362,6 +466,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               onOpenChange={setPaidByOpen}
               embedded
               className="w-full sm:flex-1 sm:min-w-0"
+              storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
 
@@ -396,7 +501,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                     : 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/30'
               )}>
                 {ratesLoading ? (
-                  <><RefreshCw size={12} className="animate-spin" /> Loading rates…</>
+                  <><RefreshCw size={12} className="animate-spin" /> {t('expense.loadingRates')}</>
                 ) : (
                   <>
                     <span className="font-medium">{sourceSubtotal} {sourceCurrency}</span>
@@ -414,7 +519,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                       ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
                       : 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/60'
                   )}>
-                  <Pencil size={10} /> Edit Rate
+                  <Pencil size={10} /> {t('expense.editRate')}
                 </button>
               </div>
             )}
@@ -423,7 +528,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 text-xs text-violet-800 dark:text-violet-300">
                 <span className="font-medium shrink-0">1 {currency} =</span>
                 <input
-                  type="number" min="0" step="0.0001" value={manualRateInput} autoFocus
+                  type="number" name="exchange-rate" min="0" step="0.0001" value={manualRateInput} autoFocus
                   onChange={e => setManualRateInput(e.target.value)} placeholder="e.g. 7.20"
                   className="w-24 rounded border border-violet-300 dark:border-violet-700 px-2 py-1 text-sm font-medium bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-400"
                 />
@@ -446,9 +551,9 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
 
             {isManualRate && manualRateValue > 0 && !ratesLoading && (
               <p className="text-xs text-violet-600 dark:text-violet-400 px-1">
-                Manual rate active: 1 {currency} = {manualRateInput} {sourceCurrency}
+                {t('expense.manualRateActive', { base: currency, rate: manualRateInput, src: sourceCurrency })}
                 <button type="button" onClick={cancelManualRate} className="ml-2 underline hover:no-underline">
-                  reset
+                  {t('common.reset')}
                 </button>
               </p>
             )}
@@ -467,7 +572,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               strokeWidth={2}
               className={cn('transition-transform duration-200', showFees && 'rotate-180')}
             />
-            {showFees ? 'Hide Tax & Tip' : '+ Add Tax & Tip'}
+            {showFees ? t('expense.hideTaxTip') : t('expense.addTaxTip')}
           </button>
 
           {/* Slide-down panel — grid-rows trick for smooth height animation */}
@@ -478,7 +583,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
             <div className="overflow-hidden">
               <div className="mt-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Fee Breakdown — distributed proportionally
+                  {t('expense.feeBreakdown')}
                 </p>
 
                 <div className="flex gap-2">
@@ -490,15 +595,35 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                     <input
                       ref={taxRef}
                       type="number"
+                      name="tax-percent"
                       min="0"
                       max="100"
                       step="0.1"
                       value={taxInput}
-                      onChange={e => setTaxInput(e.target.value)}
-                      placeholder="Tax %"
+                      onChange={e => { setTaxInput(e.target.value); setTaxHighlight(false); }}
+                      onAnimationEnd={() => setTaxHighlight(false)}
+                      placeholder={t('expense.taxPlaceholder')}
                       disabled={feesDisabled}
-                      className={cn(smallInputCls, 'w-full pl-7', feesDisabled && 'opacity-40 cursor-not-allowed')}
+                      className={cn(
+                        smallInputCls, 'w-full pl-7',
+                        feesDisabled && 'opacity-40 cursor-not-allowed',
+                        taxHighlight && 'animate-[taxGlow_1s_ease-out_forwards]',
+                      )}
                     />
+                    {/* Inherited tax source label */}
+                    {inheritedTax.source !== null && !feesDisabled && (
+                      <p className={cn(
+                        'text-[10px] mt-1 leading-none',
+                        taxOverridden
+                          ? 'text-amber-500 dark:text-amber-400'
+                          : 'text-slate-400 dark:text-slate-500',
+                      )}>
+                        {inheritedTax.source === 'group'
+                          ? t('expense.groupDefault', { rate: inheritedTax.rate })
+                          : t('expense.profileDefault', { rate: inheritedTax.rate })}
+                        {taxOverridden && ' ' + t('expense.overridden')}
+                      </p>
+                    )}
                   </div>
 
                   {/* Flat tip */}
@@ -508,11 +633,12 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                     </span>
                     <input
                       type="number"
+                      name="tip-amount"
                       min="0"
                       step="0.01"
                       value={tipInput}
                       onChange={e => setTipInput(e.target.value)}
-                      placeholder={`Tip (${sourceCurrency})`}
+                      placeholder={`${t('expense.tip')} (${sourceCurrency})`}
                       disabled={feesDisabled}
                       className={cn(smallInputCls, 'w-full pl-7', feesDisabled && 'opacity-40 cursor-not-allowed')}
                     />
@@ -523,23 +649,23 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                 {hasFees && baseSubtotal > 0 && (
                   <div className="space-y-0.5 text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-700/60">
                     <div className="flex justify-between">
-                      <span>Subtotal</span>
+                      <span>{t('expense.subtotal')}</span>
                       <span className="font-medium text-slate-700 dark:text-slate-200">{formatPrice(baseSubtotal)}</span>
                     </div>
                     {taxPercent > 0 && (
                       <div className="flex justify-between">
-                        <span>Tax ({taxPercent}%)</span>
+                        <span>{t('expense.taxLine', { rate: taxPercent })}</span>
                         <span className="font-medium text-slate-700 dark:text-slate-200">+{formatPrice(taxBase)}</span>
                       </div>
                     )}
                     {sourceTip > 0 && (
                       <div className="flex justify-between">
-                        <span>Tip ({sourceTip} {sourceCurrency})</span>
+                        <span>{t('expense.tipLine', { amount: sourceTip, currency: sourceCurrency })}</span>
                         <span className="font-medium text-slate-700 dark:text-slate-200">+{formatPrice(tipBase)}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-100 border-t border-slate-200 dark:border-slate-700/60 pt-0.5 mt-0.5">
-                      <span>Grand Total</span>
+                      <span>{t('expense.grandTotal')}</span>
                       <span>{formatPrice(grandTotalBase)}</span>
                     </div>
                   </div>
@@ -547,7 +673,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
 
                 {feesDisabled && (
                   <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                    Enter an amount above to enable tax & tip fields.
+                    {t('expense.feesDisabledHint')}
                   </p>
                 )}
               </div>
@@ -565,7 +691,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                   ? 'bg-violet-600 text-white'
                   : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
               )}>
-              {type === 'equally' ? 'Split Equally' : 'Manual Amounts'}
+              {type === 'equally' ? t('expense.splitEqually') : t('expense.exactAmounts')}
             </button>
           ))}
         </div>
@@ -575,18 +701,20 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Splitting with ({involvedList.length}/{participants.length})
+                {t('expense.splittingWith', { n: involvedList.length, total: participants.length })}
               </span>
               <div className="flex items-center gap-3">
                 {isForeign && baseSubtotal > 0 && !ratesLoading && (
-                  <span className="text-xs text-blue-500 dark:text-blue-400 font-medium">splits in {currency}</span>
+                  <span className="text-xs text-blue-500 dark:text-blue-400 font-medium">
+                    {t('expense.splitsIn', { currency })}
+                  </span>
                 )}
                 <button
                   type="button"
                   onClick={toggleAll}
                   className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
                 >
-                  {allSelected ? 'Deselect All' : 'Select All'}
+                  {allSelected ? t('expense.deselectAll') : t('expense.selectAll')}
                 </button>
               </div>
             </div>
@@ -656,6 +784,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
                           </span>
                           <input
                             type="number"
+                            name={`exact-amount-${p.id}`}
                             min="0"
                             step="0.01"
                             value={exactAmounts[p.id] ?? ''}
@@ -681,7 +810,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
               <div className="mt-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-500 dark:text-slate-400">
-                    {hasFees ? 'Subtotal assigned' : 'Total assigned'}
+                    {hasFees ? t('expense.subtotalAssigned') : t('expense.totalAssigned')}
                   </span>
                   <span className={cn('text-xs font-semibold',
                     Math.abs(exactSumSource() - sourceSubtotal) < 0.01 && sourceSubtotal > 0
@@ -703,7 +832,7 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
             {splitType === 'exact' && hasFees && involvedList.length > 0 && Math.abs(exactSumSource() - sourceSubtotal) < 0.01 && sourceSubtotal > 0 && (
               <div className="mt-1 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-100 dark:border-violet-900/40">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400 mb-1">
-                  Final owed (subtotal + tax + tip)
+                  {t('expense.finalOwed')}
                 </p>
                 <div className="space-y-0.5">
                   {involvedList.map((p, i) => {
@@ -732,8 +861,8 @@ export default function ExpenseForm({ participants, onAdd }: Props) {
           <span className="flex flex-col items-center leading-tight">
             <span>
               {sourceSubtotal > 0
-                ? `Add Expense (${sourceSubtotal.toFixed(2)} ${sourceCurrency})`
-                : 'Add Expense'}
+                ? t('expense.addExpenseWithAmount', { amount: sourceSubtotal.toFixed(2), currency: sourceCurrency })
+                : t('expense.addExpense')}
             </span>
             {isForeign && grandTotalBase > 0 && (
               <span className="text-[11px] font-normal opacity-75">≈ {formatPrice(grandTotalBase)}</span>

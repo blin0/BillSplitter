@@ -212,6 +212,7 @@ export default function CurrencySelect({
               <input
                 ref={searchRef}
                 type="text"
+                name="currency-search"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && updateOpen(false)}

@@ -1,0 +1,70 @@
+{
+  "title": "Analytiques",
+  "summary": "Résumé",
+  "group": "Groupe",
+  "selectGroup": "Sélectionner un groupe",
+  "noGroups": "Rejoignez ou créez un groupe pour voir les analytiques.",
+  "cat": {
+    "Dining": "Restauration",
+    "Coffee": "Café",
+    "Groceries": "Courses",
+    "Travel": "Transport",
+    "Bills": "Factures",
+    "Misc": "Divers",
+    "Tax": "Taxe",
+    "Tip": "Pourboire"
+  },
+  "donut": {
+    "title": "Catégories",
+    "total": "Total",
+    "noExpenses": "Aucune dépense",
+    "insightTop": "Votre principale catégorie est {{cat}}, représentant {{pct}}% des dépenses totales.",
+    "insightNone": "Ajoutez des dépenses pour voir la répartition."
+  },
+  "savings": {
+    "title": "Totaux précis",
+    "tracked": "suivi",
+    "tax": "Taxe",
+    "tips": "Pourboires",
+    "insight": "Vous avez suivi {{amount}} en taxes et pourboires — {{pct}}% des dépenses totales.",
+    "acrossExpenses_one": "Sur {{count}} dépense avec taxe ou pourboire",
+    "acrossExpenses_other": "Sur {{count}} dépenses avec taxe ou pourboire"
+  },
+  "peer": {
+    "title": "Dynamique de groupe",
+    "debtFlow": "Flux de dettes",
+    "totalSpent": "Total dépensé",
+    "noParticipants": "Aucun participant",
+    "whoPaysWho": "Qui paie qui",
+    "morePayments_one": "+{{count}} paiement supplémentaire",
+    "morePayments_other": "+{{count}} paiements supplémentaires",
+    "noSpending": "Aucune dépense",
+    "isOwed": "Doit recevoir",
+    "owes": "Doit",
+    "fullySettled": "✓ Soldé",
+    "pctSettled": "{{pct}}% soldé",
+    "splits_one": "{{count}} partage",
+    "splits_other": "{{count}} partages",
+    "totalSpentLabel": "Total dépensé :",
+    "pctOfTotal": "% de son total",
+    "insight": "{{pct}}% de tous les partages sont entièrement soldés.",
+    "insightNone": "Ajoutez des participants pour voir la dynamique."
+  },
+  "velocity": {
+    "title": "Vitesse de dépense",
+    "thirtyDay": "30 jours",
+    "total": "Total",
+    "largeExpenses": "Grandes dépenses",
+    "fxTitle": "Dérive du taux de change",
+    "fxDesc_one": "{{count}} dépense a été enregistrée en devise étrangère au taux du jour.",
+    "fxDesc_other": "{{count}} dépenses ont été enregistrées en devises étrangères au taux du jour.",
+    "fxSuffix": "Convertis aux taux actuels, le total serait",
+    "fxMore": "{{amount}} de plus que ce qui était bloqué.",
+    "fxLess": "{{amount}} de moins que ce qui était bloqué.",
+    "insight": "Les dépenses ont {{dir}} de {{pct}}% par rapport aux 30 derniers jours.",
+    "up": "augmenté",
+    "down": "diminué",
+    "insightNone": "Historique insuffisant pour calculer la tendance."
+  },
+  "insightLabel": "Aperçu intelligent"
+}

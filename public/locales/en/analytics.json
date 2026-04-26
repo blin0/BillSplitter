@@ -1,0 +1,70 @@
+{
+  "title": "Analytics",
+  "summary": "Summary",
+  "group": "Group",
+  "selectGroup": "Select group",
+  "noGroups": "Join or create a group to see analytics.",
+  "cat": {
+    "Dining": "Dining",
+    "Coffee": "Coffee",
+    "Groceries": "Groceries",
+    "Travel": "Travel",
+    "Bills": "Bills",
+    "Misc": "Misc",
+    "Tax": "Tax",
+    "Tip": "Tip"
+  },
+  "donut": {
+    "title": "Categories",
+    "total": "Total",
+    "noExpenses": "No expenses yet",
+    "insightTop": "Your top spending category is {{cat}}, making up {{pct}}% of total spend.",
+    "insightNone": "Add some expenses to see your category breakdown."
+  },
+  "savings": {
+    "title": "Precision Totals",
+    "tracked": "tracked",
+    "tax": "Tax",
+    "tips": "Tips",
+    "insight": "You've precisely tracked {{amount}} in taxes and tips — {{pct}}% of total spend.",
+    "acrossExpenses_one": "Across {{count}} expense with tax or tip",
+    "acrossExpenses_other": "Across {{count}} expenses with tax or tip"
+  },
+  "peer": {
+    "title": "Peer Dynamics",
+    "debtFlow": "Debt Flow",
+    "totalSpent": "Total Spent",
+    "noParticipants": "No participants yet",
+    "whoPaysWho": "Who Pays Who",
+    "morePayments_one": "+{{count}} more payment",
+    "morePayments_other": "+{{count}} more payments",
+    "noSpending": "No spending",
+    "isOwed": "Is owed",
+    "owes": "Owes",
+    "fullySettled": "✓ Fully settled",
+    "pctSettled": "{{pct}}% settled",
+    "splits_one": "{{count}} split",
+    "splits_other": "{{count}} splits",
+    "totalSpentLabel": "Total spent:",
+    "pctOfTotal": "% of their total",
+    "insight": "{{pct}}% of all splits in this view are fully settled.",
+    "insightNone": "Add participants to see peer dynamics."
+  },
+  "velocity": {
+    "title": "Spending Velocity",
+    "thirtyDay": "30-day",
+    "total": "Total",
+    "largeExpenses": "Large Expenses",
+    "fxTitle": "Exchange Rate Drift",
+    "fxDesc_one": "{{count}} expense was recorded in a foreign currency at the rate on that day.",
+    "fxDesc_other": "{{count}} expenses were recorded in foreign currencies at the rate on that day.",
+    "fxSuffix": "If converted at today's rates, the total would be",
+    "fxMore": "{{amount}} more than what was locked in.",
+    "fxLess": "{{amount}} less than what was locked in.",
+    "insight": "Spending is {{dir}} {{pct}}% vs the prior 30-day period.",
+    "up": "up",
+    "down": "down",
+    "insightNone": "Not enough history yet to compute a velocity trend."
+  },
+  "insightLabel": "Smart insight"
+}

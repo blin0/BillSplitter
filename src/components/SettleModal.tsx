@@ -4,6 +4,7 @@ import {
   Loader2, ChevronDown, Copy, Check, Monitor, ScanLine,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import { fetchInvitedMemberProfiles, type MemberProfile } from '../lib/db';
 import { supabase } from '../lib/supabase';
@@ -103,6 +104,8 @@ function ZelleQR({
   isCopied: boolean;
   onCopy:   () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col items-center gap-3 px-3 py-4 rounded-xl border border-[#6d1ed1]/25 bg-[#6d1ed1]/5 dark:bg-[#6d1ed1]/10">
       {/* Section label */}
@@ -128,7 +131,7 @@ function ZelleQR({
       <div className="flex items-start gap-1.5 text-center px-1">
         <ScanLine size={13} className="text-[#6d1ed1] dark:text-purple-400 mt-0.5 shrink-0" />
         <p className="text-[11px] text-[#6d1ed1]/80 dark:text-purple-400/80 leading-relaxed">
-          Scan with your banking app, or copy the handle below.
+          {t('settlement.zelleInstruction')}
         </p>
       </div>
 
@@ -143,7 +146,7 @@ function ZelleQR({
         <button
           type="button"
           onClick={onCopy}
-          title="Copy Zelle handle"
+          title={t('settlement.zelleInstruction')}
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
             'hover:scale-105 active:scale-95',
@@ -153,8 +156,8 @@ function ZelleQR({
           )}
         >
           {isCopied
-            ? <><Check size={11} />Copied!</>
-            : <><Copy size={11} />Copy</>}
+            ? <><Check size={11} />{t('common.copied')}</>
+            : <><Copy size={11} />{t('common.copy')}</>}
         </button>
       </div>
     </div>
@@ -174,6 +177,7 @@ export default function SettleModal({
   onCancel,
 }: SettleModalProps) {
   const { formatPrice } = useCurrency();
+  const { t } = useTranslation();
 
   const [inputVal,       setInputVal      ] = useState(String(amount));
   const [profiles,       setProfiles      ] = useState<MemberProfile[]>([]);
@@ -264,12 +268,12 @@ export default function SettleModal({
             <CreditCard size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
           <h2 className="flex-1 text-base font-semibold text-gray-900 dark:text-slate-100">
-            Settle up
+            {t('settlement.settleUpTitle')}
           </h2>
           <button
             onClick={onCancel}
             className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -292,12 +296,13 @@ export default function SettleModal({
           {/* Amount */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500 dark:text-slate-400">
-              {allowPartial ? 'Amount to pay' : 'Amount'}
+              {allowPartial ? t('settlement.amountToPay') : t('settlement.amount')}
             </label>
             {allowPartial ? (
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  name="settlement-amount"
                   min="0.01"
                   step="0.01"
                   max={amount}
@@ -314,7 +319,9 @@ export default function SettleModal({
                   )}
                 />
                 {isPartial && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium shrink-0">partial</span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium shrink-0">
+                    {t('settlement.partial')}
+                  </span>
                 )}
               </div>
             ) : (
@@ -324,7 +331,7 @@ export default function SettleModal({
             )}
             {allowPartial && (
               <p className="text-xs text-gray-400 dark:text-slate-500">
-                Full amount: {formatPrice(amount)}
+                {t('settlement.fullAmount', { amount: formatPrice(amount) })}
               </p>
             )}
           </div>
@@ -335,7 +342,7 @@ export default function SettleModal({
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-px bg-gray-100 dark:bg-slate-800" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 px-1">
-                  Smart settle
+                  {t('settlement.smartSettle')}
                 </span>
                 <div className="flex-1 h-px bg-gray-100 dark:bg-slate-800" />
               </div>
@@ -346,7 +353,7 @@ export default function SettleModal({
                 </div>
               ) : invitedMembers.length === 0 ? (
                 <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-1">
-                  No other invited members in this group.
+                  {t('settlement.noInvitedMembers')}
                 </p>
               ) : (
                 <>
@@ -454,7 +461,7 @@ export default function SettleModal({
                                 </>
                               ) : (
                                 <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-1">
-                                  No payment handles linked.
+                                  {t('settlement.noPaymentHandles')}
                                 </p>
                               )}
                             </div>
@@ -469,7 +476,7 @@ export default function SettleModal({
                     <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
                       <Monitor size={13} className="text-blue-500 dark:text-blue-400 mt-0.5 shrink-0" />
                       <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-                        Paying from a computer? Copy the handle and paste it into your payment provider's website.
+                        {t('settlement.desktopTip')}
                       </p>
                     </div>
                   )}
@@ -486,7 +493,7 @@ export default function SettleModal({
             onClick={onCancel}
             className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleConfirm}
@@ -498,7 +505,7 @@ export default function SettleModal({
               'bg-amber-600 shadow-[0_0_12px_rgba(245,158,11,0.3)]',
             )}
           >
-            Mark settled
+            {t('settlement.markSettled')}
           </button>
         </div>
       </div>

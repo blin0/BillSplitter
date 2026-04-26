@@ -3,6 +3,7 @@ import { UserPlus, X, Lock } from 'lucide-react';
 import type { Participant } from '../types';
 import { cn } from '../lib/cn';
 import { round2 } from '../utils/calculations';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   participants: Participant[];
@@ -15,6 +16,7 @@ interface Props {
 
 export default function ParticipantInput({ participants, balances, onAdd, onRemove, readOnly = false }: Props) {
   const [input, setInput] = useState('');
+  const { t } = useTranslation();
 
   function handleAdd() {
     const name = input.trim();
@@ -26,16 +28,17 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">Group Members</h2>
+      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">{t('members.title')}</h2>
 
       {!readOnly && (
         <div className="flex gap-2 mb-4">
           <input
             type="text"
+            name="participant-name"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="Add a person..."
+            placeholder={t('members.addPlaceholder')}
             className="flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 px-3 py-2 text-sm transition-colors focus:outline-none hover:border-gray-300 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/80 focus:border-violet-500 dark:focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:focus:ring-violet-500/20"
           />
           <button
@@ -43,13 +46,13 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-all hover:scale-105 active:scale-95"
           >
             <UserPlus size={15} />
-            Add
+            {t('members.add')}
           </button>
         </div>
       )}
 
       {participants.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2">No members yet.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2">{t('members.noMembers')}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {participants.map(p => {
@@ -82,7 +85,7 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
                         'whitespace-normal text-center'
                       )}
                     >
-                      Cannot remove member with an active balance. Settle all debts first.
+                      {t('members.cannotRemove')}
                       {/* Arrow — matches tooltip background */}
                       <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white dark:border-t-slate-800" />
                     </span>

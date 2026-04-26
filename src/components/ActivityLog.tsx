@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PlusCircle, Trash2, CheckCircle2, Activity } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { fetchActivityLogs, type ActivityEntry, type ActivityActionType } from '../lib/db';
 import { cn } from '../lib/cn';
@@ -10,15 +11,34 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60)  return 'just now';
+type TFunc = (key: string, opts?: Record<string, unknown>) => string;
+
+function relativeTime(iso: string, t: TFunc): string {
+  const then  = new Date(iso);
+  const now   = new Date();
+  const diff  = now.getTime() - then.getTime();
+  const s     = Math.floor(diff / 1000);
+
+  if (s < 10)  return t('activity.justNow');
+  if (s < 60)  return t('activity.secondsAgo', { count: s });
+
   const m = Math.floor(s / 60);
-  if (m < 60)  return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (m < 60)  return t('activity.minutesAgo', { count: m });
+
+  const time = then.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const todayStr     = now.toDateString();
+  const yesterdayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toDateString();
+
+  if (then.toDateString() === todayStr)     return t('activity.todayAt', { time });
+  if (then.toDateString() === yesterdayStr) return t('activity.yesterdayAt', { time });
+
+  if (diff < 6 * 24 * 60 * 60 * 1000) {
+    const day = then.toLocaleDateString([], { weekday: 'short' });
+    return t('activity.dayAt', { day, time });
+  }
+
+  return then.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function formatAmount(amount: number | null): string {
@@ -28,21 +48,10 @@ function formatAmount(amount: number | null): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Small auth-user avatar. */
-function ActorAvatar({
-  name,
-  avatarUrl,
-}: {
-  name: string | null;
-  avatarUrl?: string | null;
-}) {
+function ActorAvatar({ name, avatarUrl }: { name: string | null; avatarUrl?: string | null }) {
   if (avatarUrl) {
     return (
-      <img
-        src={avatarUrl}
-        alt={name ?? ''}
-        className="w-5 h-5 rounded-full object-cover shrink-0"
-      />
+      <img src={avatarUrl} alt={name ?? ''} className="w-5 h-5 rounded-full object-cover shrink-0" />
     );
   }
   return (
@@ -52,10 +61,6 @@ function ActorAvatar({
   );
 }
 
-/**
- * Highlighted payer/member name chip — violet to match the dashboard avatar color.
- * Uses the same violet palette as the participant chips elsewhere in the app.
- */
 function PayerChip({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[11px] font-semibold leading-none">
@@ -64,7 +69,6 @@ function PayerChip({ name }: { name: string }) {
   );
 }
 
-/** Settlement "to" name — subtle slate chip so it doesn't compete with payer. */
 function SecondaryChip({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold leading-none">
@@ -73,7 +77,6 @@ function SecondaryChip({ name }: { name: string }) {
   );
 }
 
-/** Settled / Unsettled status badge. */
 function StatusBadge({ settled }: { settled: boolean }) {
   return settled ? (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-semibold leading-none">
@@ -87,24 +90,19 @@ function StatusBadge({ settled }: { settled: boolean }) {
   );
 }
 
-/** Action icon. */
 function ActionIcon({ type }: { type: ActivityActionType | null }) {
-  if (type === 'EXPENSE_ADDED')
-    return <PlusCircle   size={11} className="shrink-0 text-violet-500 dark:text-violet-400" />;
-  if (type === 'EXPENSE_DELETED')
-    return <Trash2       size={11} className="shrink-0 text-red-400 dark:text-red-500" />;
-  if (type === 'SETTLEMENT_MADE')
-    return <CheckCircle2 size={11} className="shrink-0 text-green-500 dark:text-green-400" />;
-  return   <Activity    size={11} className="shrink-0 text-slate-400 dark:text-slate-500" />;
+  if (type === 'EXPENSE_ADDED')   return <PlusCircle   size={11} className="shrink-0 text-violet-500 dark:text-violet-400" />;
+  if (type === 'EXPENSE_DELETED') return <Trash2       size={11} className="shrink-0 text-red-400 dark:text-red-500" />;
+  if (type === 'SETTLEMENT_MADE') return <CheckCircle2 size={11} className="shrink-0 text-green-500 dark:text-green-400" />;
+  return                                 <Activity     size={11} className="shrink-0 text-slate-400 dark:text-slate-500" />;
 }
 
 // ─── Row renderer ─────────────────────────────────────────────────────────────
 
-function EntryRow({ entry }: { entry: ActivityEntry }) {
-  const actorName  = entry.actorProfile?.fullName ?? 'Someone';
-  const payerName  = entry.participantName;
+function EntryRow({ entry, t }: { entry: ActivityEntry; t: TFunc }) {
+  const actorName = entry.actorProfile?.fullName ?? 'Someone';
+  const payerName = entry.participantName;
 
-  // For settlements: parse "to" name from message "settled for Brian → Alice"
   const toName = (() => {
     if (entry.actionType !== 'SETTLEMENT_MADE') return null;
     const m = entry.message.match(/→ (.+)$/);
@@ -113,13 +111,9 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
 
   return (
     <li className="flex items-start gap-2.5 py-2.5 border-b border-gray-50 dark:border-slate-800/60 last:border-0">
-
-      {/* Auth-user avatar */}
       <ActorAvatar name={actorName} avatarUrl={entry.actorProfile?.avatarUrl} />
 
       <div className="flex-1 min-w-0 space-y-1">
-
-        {/* ── Primary line: expense-focused story ── */}
         {entry.actionType === 'EXPENSE_ADDED' && (
           <p className="flex items-center gap-1 flex-wrap leading-snug">
             <span className="text-[12px] font-semibold text-gray-800 dark:text-slate-100">
@@ -128,7 +122,7 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
             <span className="text-[11px] text-gray-400 dark:text-slate-500">
               ({formatAmount(entry.amount)})
             </span>
-            <span className="text-[11px] text-gray-500 dark:text-slate-400">paid by</span>
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t('activity.paidBy')}</span>
             {payerName
               ? <PayerChip name={payerName} />
               : <span className="text-[11px] text-gray-500 dark:text-slate-400">—</span>
@@ -139,21 +133,18 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
         {entry.actionType === 'EXPENSE_DELETED' && (
           <div className="space-y-0.5">
             <p className="flex items-center gap-1 flex-wrap leading-snug">
-              <span className="text-[11px] text-red-500 dark:text-red-400 font-medium">Deleted</span>
+              <span className="text-[11px] text-red-500 dark:text-red-400 font-medium">{t('activity.deleted')}</span>
               {entry.isSettled != null && <StatusBadge settled={entry.isSettled} />}
-              <span className="text-[11px] text-gray-400 dark:text-slate-500">expense:</span>
+              <span className="text-[11px] text-gray-400 dark:text-slate-500">{t('activity.expense')}</span>
             </p>
             <p className="flex items-center gap-1 flex-wrap leading-snug">
-              <span className={cn(
-                'text-[12px] font-semibold',
-                'text-gray-500 dark:text-slate-400 line-through decoration-red-400/70',
-              )}>
+              <span className={cn('text-[12px] font-semibold', 'text-gray-500 dark:text-slate-400 line-through decoration-red-400/70')}>
                 &ldquo;{entry.message}&rdquo;
               </span>
               <span className="text-[11px] text-gray-400 dark:text-slate-500">
                 ({formatAmount(entry.amount)})
               </span>
-              <span className="text-[11px] text-gray-500 dark:text-slate-400">paid by</span>
+              <span className="text-[11px] text-gray-500 dark:text-slate-400">{t('activity.paidBy')}</span>
               {payerName
                 ? <PayerChip name={payerName} />
                 : <span className="text-[11px] text-gray-500 dark:text-slate-400">—</span>
@@ -165,7 +156,7 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
         {entry.actionType === 'SETTLEMENT_MADE' && (
           <p className="flex items-center gap-1 flex-wrap leading-snug">
             {payerName && <PayerChip name={payerName} />}
-            <span className="text-[11px] text-gray-500 dark:text-slate-400">paid</span>
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t('activity.paid')}</span>
             {toName && <SecondaryChip name={toName} />}
             {entry.amount != null && (
               <span className="text-[11px] font-bold text-green-600 dark:text-green-400">
@@ -179,18 +170,16 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
           <p className="text-[11px] text-gray-600 dark:text-slate-300">{entry.message}</p>
         )}
 
-        {/* ── Secondary line: who triggered it + timestamp ── */}
         <div className="flex items-center gap-1.5">
           <ActionIcon type={entry.actionType} />
           <span className="text-[10px] text-gray-400 dark:text-slate-500">
-            by <span className="font-medium">{actorName}</span>
+            {t('activity.by')} <span className="font-medium">{actorName}</span>
           </span>
           <span className="text-[10px] text-gray-300 dark:text-slate-600">·</span>
           <span className="text-[10px] text-gray-400 dark:text-slate-500">
-            {relativeTime(entry.createdAt)}
+            {relativeTime(entry.createdAt, t)}
           </span>
         </div>
-
       </div>
     </li>
   );
@@ -199,8 +188,14 @@ function EntryRow({ entry }: { entry: ActivityEntry }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ActivityLog({ groupId }: Props) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(tk => tk + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,21 +229,21 @@ export default function ActivityLog({ groupId }: Props) {
       <div className="flex items-center gap-2 mb-0.5">
         <Activity size={15} className="text-violet-500 dark:text-violet-400 shrink-0" />
         <h2 className="text-sm font-semibold text-gray-800 dark:text-slate-100 tracking-wide">
-          Activity
+          {t('activity.title')}
         </h2>
       </div>
       <p className="text-[10px] text-gray-400 dark:text-slate-500 mb-3">
-        Last 10 actions in this group
+        {t('activity.lastNActions')}
       </p>
 
       {loading ? (
-        <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-4">Loading…</p>
+        <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-4">{t('common.loading')}</p>
       ) : entries.length === 0 ? (
-        <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-4">No activity yet.</p>
+        <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-4">{t('activity.noActivity')}</p>
       ) : (
         <ul>
           {entries.map(entry => (
-            <EntryRow key={entry.id} entry={entry} />
+            <EntryRow key={entry.id} entry={entry} t={t as TFunc} />
           ))}
         </ul>
       )}

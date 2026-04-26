@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock } from 'lucide-react';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, createGroup, joinGroupByCode } from '../lib/db';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, createGroup, joinGroupByCode } from '../lib/db';
+import { useCurrency } from '../context/CurrencyContext';
 import { useSubscription } from '../hooks/useSubscription';
 import ConfirmModal from './ui/ConfirmModal';
 
@@ -21,18 +23,16 @@ interface Props {
   /** Called after successfully deleting a group */
   onGroupDeleted: (groupId: string) => void;
   /** Navigate to the Profile page */
-  onOpenProfile:  () => void;
+  onOpenProfile:   () => void;
+  /** Navigate to the Analytics page */
+  onOpenAnalytics: () => void;
+  /** Called after admin saves a new group default tax rate */
+  onGroupTaxRateChanged: (groupId: string, rate: number | null) => void;
 }
 
 // ─── Role metadata ────────────────────────────────────────────────────────────
 
 type Role = 'admin' | 'editor' | 'viewer';
-
-const ROLES: { value: Role; label: string; description: string }[] = [
-  { value: 'admin',  label: 'Admin',  description: 'Full access + manage members' },
-  { value: 'editor', label: 'Editor', description: 'Add and delete expenses'       },
-  { value: 'viewer', label: 'Viewer', description: 'View only'                     },
-];
 
 const ROLE_BADGE_CLASS: Record<Role, string> = {
   admin:  'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400',
@@ -51,8 +51,15 @@ function RoleDropdown({
   disabled: boolean;
   onChange: (r: Role) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const ROLES: { value: Role; label: string; description: string }[] = [
+    { value: 'admin',  label: t('sidebar.roleAdmin'),  description: t('sidebar.roleAdminDesc')  },
+    { value: 'editor', label: t('sidebar.roleEditor'), description: t('sidebar.roleEditorDesc') },
+    { value: 'viewer', label: t('sidebar.roleViewer'), description: t('sidebar.roleViewerDesc') },
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +70,7 @@ function RoleDropdown({
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
 
-  const meta = ROLES.find(r => r.value === value)!;
+  const meta = ROLES.find(r => r.value === value) ?? ROLES[2];
 
   return (
     <div ref={ref} className="relative shrink-0">
@@ -131,7 +138,7 @@ function RoleDropdown({
   );
 }
 
-// ─── Confirmation modal ───────────────────────────────────────────────────────
+// ─── Remove member confirmation ───────────────────────────────────────────────
 
 function RemoveConfirmModal({
   member,
@@ -144,6 +151,7 @@ function RemoveConfirmModal({
   onConfirm: () => void;
   onCancel:  () => void;
 }) {
+  const { t } = useTranslation();
   const displayName = member.fullName ?? member.userId.slice(0, 8);
 
   return (
@@ -159,13 +167,13 @@ function RemoveConfirmModal({
           <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
         </div>
         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100 mb-1">
-          Remove member?
+          {t('sidebar.removeMember')}
         </h3>
         <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 leading-relaxed">
           <span className="font-medium text-gray-700 dark:text-slate-300">{displayName}</span>
-          {' '}will be removed from{' '}
+          {' '}{t('sidebar.removeMemberWill')}{' '}
           <span className="font-medium text-gray-700 dark:text-slate-300">{groupName}</span>
-          {' '}and will lose access immediately.
+          {t('sidebar.removeMemberSuffix')}
         </p>
         <div className="flex gap-2">
           <button
@@ -173,14 +181,14 @@ function RemoveConfirmModal({
             onClick={onCancel}
             className="flex-1 px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className="flex-1 px-4 py-2 rounded-xl text-sm font-medium bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors"
           >
-            Remove
+            {t('common.remove')}
           </button>
         </div>
       </div>
@@ -204,9 +212,14 @@ export default function GroupSidebar({
   onGroupLeft,
   onGroupDeleted,
   onOpenProfile,
+  onOpenAnalytics,
+  onGroupTaxRateChanged,
 }: Props) {
-  const location     = useLocation();
-  const isProfilePage = location.pathname === '/profile';
+  const { t } = useTranslation();
+  const location       = useLocation();
+  const isProfilePage  = location.pathname === '/profile';
+  const isAnalyticsPage = location.pathname.startsWith('/analytics');
+  const { currency }   = useCurrency();
   const [copied,          setCopied         ] = useState(false);
   const [groupsOpen,      setGroupsOpen     ] = useState(true);   // default expanded
   const [membersOpen,     setMembersOpen    ] = useState(false);
@@ -221,6 +234,13 @@ export default function GroupSidebar({
   const [confirmError,    setConfirmError   ] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Group tax rate state ──────────────────────────────────────────────────
+  const [taxOpen,       setTaxOpen      ] = useState(false);
+  const [groupTaxInput, setGroupTaxInput] = useState('');
+  const [taxSaving,     setTaxSaving    ] = useState(false);
+  const [taxSaveError,  setTaxSaveError ] = useState<string | null>(null);
+  const [taxSaved,      setTaxSaved     ] = useState(false);
+
   // ── Add / Join group state ────────────────────────────────────────────────
   const [addJoinOpen,   setAddJoinOpen  ] = useState(false);
   const [createName,    setCreateName   ] = useState('');
@@ -231,10 +251,19 @@ export default function GroupSidebar({
   const [joinLoading,   setJoinLoading  ] = useState(false);
   const [joinError,     setJoinError    ] = useState<string | null>(null);
 
-  const activeGroup  = groups.find(g => g.id === activeGroupId);
-  const isAdmin      = activeGroup?.role === 'admin';
   const subscription = useSubscription();
   const FREE_TIER_GROUP_LIMIT = 3;
+
+  // Seed tax input when active group changes
+  useEffect(() => {
+    const rate = groups.find(g => g.id === activeGroupId)?.defaultTaxRate;
+    setGroupTaxInput(rate != null && rate > 0 ? String(rate) : '');
+    setTaxSaveError(null);
+    setTaxSaved(false);
+  }, [activeGroupId, groups]);
+
+  const activeGroup  = groups.find(g => g.id === activeGroupId);
+  const isAdmin      = activeGroup?.role === 'admin';
 
   // Auto-focus and select the rename input when editing starts
   useEffect(() => {
@@ -284,10 +313,9 @@ export default function GroupSidebar({
     const original = groups.find(g => g.id === editingGroupId)?.name ?? '';
     setEditingGroupId(null);
     if (!trimmed || trimmed === original) return;
-    // Optimistic update
     onGroupRenamed(editingGroupId, trimmed);
     const { error } = await updateGroupName(editingGroupId, trimmed);
-    if (error) onGroupRenamed(editingGroupId, original); // revert
+    if (error) onGroupRenamed(editingGroupId, original);
   }
 
   function cancelRename() {
@@ -336,7 +364,7 @@ export default function GroupSidebar({
     const { data, error } = await createGroup(name);
     setCreateLoading(false);
     if (error || !data) {
-      setCreateError(error ?? 'Something went wrong.');
+      setCreateError(error ?? t('common.error'));
     } else {
       setCreateName('');
       handleGroupAdded(data);
@@ -347,13 +375,13 @@ export default function GroupSidebar({
   async function handleJoin(e: FormEvent) {
     e.preventDefault();
     const code = joinCode.trim().toUpperCase();
-    if (code.length !== 6) { setJoinError('Code must be exactly 6 characters.'); return; }
+    if (code.length !== 6) { setJoinError(t('sidebar.errorCodeLength')); return; }
     setJoinError(null);
     setJoinLoading(true);
     const { data, error } = await joinGroupByCode(code);
     setJoinLoading(false);
     if (error || !data) {
-      setJoinError(error ?? 'Something went wrong.');
+      setJoinError(error ?? t('common.error'));
     } else {
       setJoinCode('');
       handleGroupAdded(data);
@@ -389,6 +417,26 @@ export default function GroupSidebar({
     }
   }
 
+  async function handleSaveTaxRate() {
+    if (!activeGroupId) return;
+    const parsed = parseFloat(groupTaxInput);
+    const rate   = isFinite(parsed) && parsed > 0 ? Math.min(100, parsed) : null;
+    setTaxSaving(true);
+    setTaxSaveError(null);
+    const { error } = await updateGroupTaxRate(activeGroupId, rate);
+    setTaxSaving(false);
+    if (error) { setTaxSaveError(error); return; }
+    setTaxSaved(true);
+    setTimeout(() => setTaxSaved(false), 2000);
+    onGroupTaxRateChanged(activeGroupId, rate);
+  }
+
+  function roleLabel(role: string): string {
+    if (role === 'admin')  return t('sidebar.roleAdmin');
+    if (role === 'editor') return t('sidebar.roleEditor');
+    return t('sidebar.roleViewer');
+  }
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -411,7 +459,7 @@ export default function GroupSidebar({
           <button
             onClick={onClose}
             className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Close sidebar"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -422,15 +470,13 @@ export default function GroupSidebar({
 
           {/* ── My Groups collapsible ── */}
           <div className="p-2">
-            {/* Trigger row — matches "Manage members" style exactly */}
             <button
               type="button"
               onClick={() => setGroupsOpen(o => !o)}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             >
               <Users size={14} className="shrink-0" />
-              <span className="flex-1 text-left font-medium">My Groups</span>
-              {/* Active group name as a subtle preview when collapsed */}
+              <span className="flex-1 text-left font-medium">{t('sidebar.myGroups')}</span>
               {!groupsOpen && activeGroup && (
                 <span className="truncate max-w-[80px] text-[11px] text-violet-500 dark:text-violet-400 font-medium">
                   {activeGroup.name}
@@ -442,18 +488,16 @@ export default function GroupSidebar({
               />
             </button>
 
-            {/* Collapsible group list */}
             {groupsOpen && (
               <div className="mt-1 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden">
                 {groups.length === 0 ? (
-                  <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">No groups yet.</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">{t('sidebar.noGroups')}</p>
                 ) : (
                   <nav className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {groups.map(group => {
                       const isAdminOfGroup = group.role === 'admin';
                       const isEditing      = editingGroupId === group.id;
 
-                      // ── Editing state: inline rename input ──
                       if (isEditing) {
                         return (
                           <div
@@ -482,7 +526,6 @@ export default function GroupSidebar({
                         );
                       }
 
-                      // ── Normal row ──
                       return (
                         <button
                           key={group.id}
@@ -501,7 +544,7 @@ export default function GroupSidebar({
                             'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full',
                             ROLE_BADGE_CLASS[group.role as Role] ?? ROLE_BADGE_CLASS.viewer,
                           )}>
-                            {group.role.charAt(0).toUpperCase() + group.role.slice(1)}
+                            {roleLabel(group.role)}
                           </span>
                           {group.id === activeGroupId && !isProfilePage && (
                             <ChevronRight size={13} className="shrink-0 text-violet-400 dark:text-violet-500" />
@@ -519,7 +562,7 @@ export default function GroupSidebar({
           {activeGroup && (
             <div className="mx-3 mt-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-1.5">
-                Invite code
+                {t('groups.inviteCode')}
               </p>
               <div className="flex items-center gap-2">
                 <span className="flex-1 font-mono text-base font-bold tracking-[0.2em] text-gray-900 dark:text-slate-100">
@@ -528,13 +571,13 @@ export default function GroupSidebar({
                 <button
                   onClick={() => copyCode(activeGroup.joinCode)}
                   className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
-                  aria-label="Copy invite code"
+                  aria-label={t('sidebar.copyInviteCode')}
                 >
                   {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                 </button>
               </div>
               <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
-                Share this code so others can join.
+                {t('sidebar.shareCode')}
               </p>
             </div>
           )}
@@ -547,7 +590,7 @@ export default function GroupSidebar({
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Users size={14} className="shrink-0" />
-                <span className="flex-1 text-left font-medium">Manage members</span>
+                <span className="flex-1 text-left font-medium">{t('sidebar.manageMembers')}</span>
                 <ChevronDown
                   size={14}
                   className={cn('shrink-0 transition-transform', membersOpen && 'rotate-180')}
@@ -557,9 +600,9 @@ export default function GroupSidebar({
               {membersOpen && (
                 <div className="mt-1 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-visible">
                   {membersLoading ? (
-                    <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">Loading…</p>
+                    <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">{t('common.loading')}</p>
                   ) : members.length === 0 ? (
-                    <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">No members found.</p>
+                    <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">{t('sidebar.noMembers')}</p>
                   ) : (
                     <ul className="divide-y divide-gray-100 dark:divide-slate-700">
                       {members.map(member => {
@@ -576,7 +619,7 @@ export default function GroupSidebar({
                                 {member.fullName ?? member.userId.slice(0, 8)}
                               </span>
                               {isSelf && (
-                                <span className="text-[10px] text-gray-400 dark:text-slate-500">you</span>
+                                <span className="text-[10px] text-gray-400 dark:text-slate-500">{t('sidebar.you')}</span>
                               )}
                             </span>
                             <RoleDropdown
@@ -609,24 +652,107 @@ export default function GroupSidebar({
             </div>
           )}
 
+          {/* ── Group Tax Rate (admin only) ── */}
+          {activeGroup && isAdmin && (
+            <div className="mx-3 mt-3">
+              <button
+                type="button"
+                onClick={() => setTaxOpen(o => !o)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Percent size={14} className="shrink-0" />
+                <span className="flex-1 text-left font-medium">{t('groups.taxRate')}</span>
+                {activeGroup.defaultTaxRate != null && activeGroup.defaultTaxRate > 0 && (
+                  <span className="text-[11px] font-semibold text-violet-500 dark:text-violet-400 shrink-0">
+                    {activeGroup.defaultTaxRate}%
+                  </span>
+                )}
+                <ChevronDown
+                  size={14}
+                  className={cn('shrink-0 transition-transform', taxOpen && 'rotate-180')}
+                />
+              </button>
+
+              {taxOpen && (
+                <div className="mt-1 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500 leading-relaxed">
+                    {t('sidebar.taxRateDesc')}
+                  </p>
+
+                  <div className={cn(
+                    'flex items-center rounded-xl border transition-colors',
+                    'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600',
+                    'hover:border-violet-400 dark:hover:border-violet-500',
+                    'focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-1 focus-within:ring-violet-300/40',
+                  )}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={groupTaxInput}
+                      onChange={e => { setGroupTaxInput(e.target.value); setTaxSaved(false); setTaxSaveError(null); }}
+                      placeholder="0"
+                      className="flex-1 bg-transparent outline-none text-xs px-3 py-2 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
+                    />
+                    <span className="pr-3 text-xs font-medium text-gray-400 dark:text-slate-500 select-none">%</span>
+                  </div>
+
+                  {/* CAD quick-fill suggestions */}
+                  {currency === 'CAD' && (
+                    <div className="flex gap-1.5">
+                      {[{ label: '13% HST', value: '13' }, { label: '5% GST', value: '5' }].map(s => (
+                        <button
+                          key={s.value}
+                          type="button"
+                          onClick={() => { setGroupTaxInput(s.value); setTaxSaved(false); setTaxSaveError(null); }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 hover:brightness-95 dark:hover:brightness-110 transition-all"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {taxSaveError && (
+                    <p className="text-[11px] text-red-500 dark:text-red-400">{taxSaveError}</p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSaveTaxRate}
+                    disabled={taxSaving}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white"
+                  >
+                    {taxSaving ? (
+                      <><Loader2 size={11} className="animate-spin" /> {t('sidebar.saving')}</>
+                    ) : taxSaved ? (
+                      <><Check size={11} /> {t('sidebar.saved')}</>
+                    ) : (
+                      t('sidebar.saveRate')
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Group Management ── */}
           {activeGroup && (
             <div className="mx-3 mt-3 mb-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2 px-1">
-                Group Management
+                {t('sidebar.groupManagement')}
               </p>
               <div className="flex flex-col gap-1.5">
-                {/* Leave Group — ghost button, all roles */}
                 <button
                   type="button"
                   onClick={() => { setConfirmError(null); setConfirmAction('leave'); }}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <LogOut size={14} className="shrink-0" />
-                  Leave Group
+                  {t('groups.leave')}
                 </button>
 
-                {/* Delete Group — ghost until hover, admin only */}
                 {isAdmin && (
                   <button
                     type="button"
@@ -634,7 +760,7 @@ export default function GroupSidebar({
                     className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/15 transition-colors group"
                   >
                     <Trash2 size={14} className="shrink-0 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" />
-                    Delete Group
+                    {t('groups.delete')}
                   </button>
                 )}
               </div>
@@ -652,7 +778,7 @@ export default function GroupSidebar({
               className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             >
               <Plus size={14} className="shrink-0" />
-              <span className="flex-1 text-left font-medium">Add / Join Group</span>
+              <span className="flex-1 text-left font-medium">{t('sidebar.addJoinGroup')}</span>
               <ChevronDown
                 size={14}
                 className={cn('shrink-0 transition-transform duration-300', addJoinOpen && 'rotate-180')}
@@ -669,8 +795,10 @@ export default function GroupSidebar({
                     <div className="flex items-start gap-2">
                       <Lock size={13} className="text-amber-500 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200">Free plan limit reached</p>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">Upgrade to Pro for more groups.</p>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200">{t('sidebar.freePlanLimit')}</p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
+                          {t('sidebar.upgradeProDesc')}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -678,18 +806,19 @@ export default function GroupSidebar({
                       onClick={() => { setBlocked(false); onOpenProfile(); onClose(); }}
                       className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-xs font-semibold rounded-lg py-1.5 transition-all"
                     >
-                      <Sparkles size={12} /> Upgrade to Pro
+                      <Sparkles size={12} /> {t('sidebar.upgradeProBtn')}
                     </button>
                   </div>
                 ) : (
                   <>
                     {/* ── Create New ── */}
                     <form onSubmit={handleCreate} className="p-3 space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Create New</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{t('sidebar.createNew')}</p>
                       <input
                         type="text"
+                        name="group-name"
                         required
-                        placeholder="e.g. Japan Trip 2025"
+                        placeholder={t('sidebar.groupNamePlaceholder')}
                         value={createName}
                         onChange={e => setCreateName(e.target.value)}
                         maxLength={60}
@@ -701,7 +830,9 @@ export default function GroupSidebar({
                         disabled={createLoading || !createName.trim()}
                         className="w-full flex items-center justify-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg py-1.5 transition-colors"
                       >
-                        {createLoading ? <><Loader2 size={12} className="animate-spin" /> Creating…</> : 'Create group'}
+                        {createLoading
+                          ? <><Loader2 size={12} className="animate-spin" /> {t('sidebar.creating')}</>
+                          : t('groups.createGroup')}
                       </button>
                     </form>
 
@@ -709,12 +840,13 @@ export default function GroupSidebar({
 
                     {/* ── Join Existing ── */}
                     <form onSubmit={handleJoin} className="p-3 space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Join Existing</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{t('sidebar.joinExisting')}</p>
                       <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 transition-colors hover:border-violet-400 dark:hover:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
                         <Hash size={12} className="text-gray-400 dark:text-slate-500 shrink-0" />
                         <input
                           type="text"
-                          placeholder="6-digit code"
+                          name="invite-code"
+                          placeholder={t('sidebar.codePlaceholder')}
                           value={joinCode}
                           onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
                           maxLength={6}
@@ -727,7 +859,9 @@ export default function GroupSidebar({
                         disabled={joinLoading || joinCode.trim().length !== 6}
                         className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg py-1.5 transition-colors"
                       >
-                        {joinLoading ? <><Loader2 size={12} className="animate-spin" /> Joining…</> : 'Join group'}
+                        {joinLoading
+                          ? <><Loader2 size={12} className="animate-spin" /> {t('sidebar.joining')}</>
+                          : t('groups.joinGroup')}
                       </button>
                     </form>
                   </>
@@ -738,8 +872,21 @@ export default function GroupSidebar({
 
         </div>
 
-        {/* ── Profile footer (always visible at bottom) ── */}
-        <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 p-2">
+        {/* ── Footer (Analytics + Profile) ── */}
+        <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 p-2 space-y-0.5">
+          <button
+            type="button"
+            onClick={() => { onOpenAnalytics(); onClose(); }}
+            className={cn(
+              'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+              isAnalyticsPage
+                ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-semibold'
+                : 'text-gray-600 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-700 dark:hover:text-violet-300',
+            )}
+          >
+            <BarChart3 size={15} className="shrink-0" />
+            {t('nav.analytics')}
+          </button>
           <button
             type="button"
             onClick={() => { onOpenProfile(); onClose(); }}
@@ -751,7 +898,7 @@ export default function GroupSidebar({
             )}
           >
             <User size={15} className="shrink-0" />
-            Profile
+            {t('profile.title')}
           </button>
         </div>
       </aside>
@@ -769,13 +916,13 @@ export default function GroupSidebar({
       {/* ── Leave / Delete group modal ── */}
       {confirmAction && activeGroup && (
         <ConfirmModal
-          title={confirmAction === 'leave' ? 'Leave group?' : 'Delete group?'}
+          title={confirmAction === 'leave' ? t('sidebar.leaveGroupTitle') : t('sidebar.deleteGroupTitle')}
           message={
             confirmAction === 'leave'
-              ? `Are you sure? You will lose access to ${activeGroup.name}'s history and will need a new invite code to rejoin.`
-              : `DANGER: This will permanently delete all expenses, splits, members, and activity for everyone in "${activeGroup.name}".\n\nThis cannot be undone.`
+              ? t('sidebar.leaveGroupMsg', { name: activeGroup.name })
+              : t('sidebar.deleteGroupMsg', { name: activeGroup.name })
           }
-          confirmLabel={confirmAction === 'leave' ? 'Leave Group' : 'Delete Forever'}
+          confirmLabel={confirmAction === 'leave' ? t('sidebar.leaveForever') : t('sidebar.deleteForever')}
           variant="danger"
           loading={confirmLoading}
           error={confirmError}

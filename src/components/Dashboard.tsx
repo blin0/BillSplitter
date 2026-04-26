@@ -1,4 +1,5 @@
-import { TrendingDown, TrendingUp, Minus, Wallet, Info } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, Wallet, Info, Percent } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Expense, Participant, Settlement } from '../types';
 import { cn } from '../lib/cn';
 import { useCurrency } from '../context/CurrencyContext';
@@ -14,24 +15,24 @@ interface Props {
 
 // ── Category detection ────────────────────────────────────────────────────────
 
-const CATEGORY_KEYWORDS: { label: string; words: string[] }[] = [
-  { label: 'Food & Drink', words: ['dinner','lunch','breakfast','coffee','drinks','bar','restaurant','cafe','food','meal','snack','pizza','sushi','burger','wine','beer','tea','boba'] },
-  { label: 'Transport',    words: ['taxi','uber','lyft','rideshare','gas','fuel','bus','train','metro','flight','car','parking','toll'] },
-  { label: 'Living',       words: ['rent','utilities','electric','water','internet','wifi','grocery','groceries','supermarket','household'] },
-  { label: 'Fun',          words: ['movie','cinema','concert','ticket','show','event','museum','park','game','sport','gym','bowling'] },
-  { label: 'Travel',       words: ['hotel','airbnb','hostel','flight','trip','travel','vacation','tour','entrance'] },
-  { label: 'Shopping',     words: ['shopping','clothes','amazon','gift','present','store','mall'] },
+const CATEGORY_KEYWORDS: { key: string; words: string[] }[] = [
+  { key: 'food',      words: ['dinner','lunch','breakfast','coffee','drinks','bar','restaurant','cafe','food','meal','snack','pizza','sushi','burger','wine','beer','tea','boba'] },
+  { key: 'transport', words: ['taxi','uber','lyft','rideshare','gas','fuel','bus','train','metro','flight','car','parking','toll'] },
+  { key: 'living',    words: ['rent','utilities','electric','water','internet','wifi','grocery','groceries','supermarket','household'] },
+  { key: 'fun',       words: ['movie','cinema','concert','ticket','show','event','museum','park','game','sport','gym','bowling'] },
+  { key: 'travel',    words: ['hotel','airbnb','hostel','flight','trip','travel','vacation','tour','entrance'] },
+  { key: 'shopping',  words: ['shopping','clothes','amazon','gift','present','store','mall'] },
 ];
 
 function categorise(description: string): string {
   const lower = description.toLowerCase();
-  for (const { label, words } of CATEGORY_KEYWORDS) {
-    if (words.some(w => lower.includes(w))) return label;
+  for (const { key, words } of CATEGORY_KEYWORDS) {
+    if (words.some(w => lower.includes(w))) return key;
   }
-  return 'Other';
+  return 'other';
 }
 
-function topCategories(expenses: Expense[]): { label: string; pct: number }[] {
+function topCategories(expenses: Expense[]): { key: string; pct: number }[] {
   if (expenses.length === 0) return [];
   const totals: Record<string, number> = {};
   let grand = 0;
@@ -42,9 +43,25 @@ function topCategories(expenses: Expense[]): { label: string; pct: number }[] {
   }
   if (grand === 0) return [];
   return Object.entries(totals)
-    .map(([label, amt]) => ({ label, pct: Math.round((amt / grand) * 100) }))
+    .map(([key, amt]) => ({ key, pct: Math.round((amt / grand) * 100) }))
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 4);
+}
+
+// ── Tax tracked computation ───────────────────────────────────────────────────
+
+function computeTaxTracked(expenses: Expense[]): { totalTax: number; count: number } {
+  let totalTax = 0;
+  let count    = 0;
+  for (const e of expenses) {
+    if (!e.taxPercent || e.taxPercent <= 0) continue;
+    const tipBase  = e.tipSourceAmount != null ? round2(e.tipSourceAmount * e.lockedRate) : 0;
+    const taxable  = round2(e.totalAmount - tipBase);
+    const taxAmt   = round2(taxable * e.taxPercent / (100 + e.taxPercent));
+    totalTax = round2(totalTax + taxAmt);
+    count++;
+  }
+  return { totalTax, count };
 }
 
 // ── Tooltip surface ───────────────────────────────────────────────────────────
@@ -65,16 +82,18 @@ const TOOLTIP_BASE = [
 
 export default function Dashboard({ participants, balances, totalSpending, settlements, expenses }: Props) {
   const { formatPrice } = useCurrency();
+  const { t } = useTranslation();
 
   function nameOf(id: string) {
     return participants.find(p => p.id === id)?.name ?? id;
   }
 
-  const cats = topCategories(expenses);
+  const cats       = topCategories(expenses);
+  const taxTracked = computeTaxTracked(expenses);
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">Summary</h2>
+      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">{t('dashboard.title')}</h2>
 
       {/* ── Total spending card ── */}
       <div className="relative group mb-4">
@@ -83,7 +102,7 @@ export default function Dashboard({ participants, balances, totalSpending, settl
             <Wallet size={18} className="text-violet-600 dark:text-violet-400" />
           </div>
           <div className="flex-1">
-            <p className="text-xs text-violet-500 dark:text-violet-400 font-medium uppercase tracking-wide">Total Group Spending</p>
+            <p className="text-xs text-violet-500 dark:text-violet-400 font-medium uppercase tracking-wide">{t('dashboard.totalSpending')}</p>
             <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{formatPrice(totalSpending)}</p>
           </div>
           <Info size={14} className="text-violet-400 dark:text-violet-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -92,12 +111,12 @@ export default function Dashboard({ participants, balances, totalSpending, settl
         {/* Spending tooltip — category breakdown */}
         {cats.length > 0 && (
           <div className={cn(TOOLTIP_BASE, 'right-0 top-full mt-2 p-3')}>
-            <p className="font-semibold text-slate-900 dark:text-slate-200 mb-2">Top Categories</p>
+            <p className="font-semibold text-slate-900 dark:text-slate-200 mb-2">{t('dashboard.topCategories')}</p>
             <div className="space-y-1.5">
               {cats.map(c => (
-                <div key={c.label}>
+                <div key={c.key}>
                   <div className="flex justify-between text-slate-900 dark:text-slate-300 mb-0.5">
-                    <span>{c.label}</span>
+                    <span>{t(`dashboard.cat.${c.key}`)}</span>
                     <span className="font-semibold">{c.pct}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
@@ -113,9 +132,25 @@ export default function Dashboard({ participants, balances, totalSpending, settl
         )}
       </div>
 
+      {/* ── Tax Tracked bento card ── */}
+      {taxTracked.count > 0 && (
+        <div className="flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
+          <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/60 rounded-lg shrink-0">
+            <Percent size={14} className="text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{t('dashboard.taxTracked')}</p>
+            <p className="text-base font-bold text-emerald-700 dark:text-emerald-300 leading-tight">{formatPrice(taxTracked.totalTax)}</p>
+          </div>
+          <p className="text-[11px] text-emerald-500 dark:text-emerald-500 shrink-0 text-right leading-snug">
+            {t('dashboard.across')}<br />{taxTracked.count} {t(taxTracked.count !== 1 ? 'dashboard.expense_other' : 'dashboard.expense_one')}
+          </p>
+        </div>
+      )}
+
       {/* ── Per-participant balance rows ── */}
       {participants.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2">Add members to see balances.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2">{t('dashboard.noMembers')}</p>
       ) : (
         <div className="space-y-1.5">
           {participants.map((p, idx) => {
@@ -130,10 +165,10 @@ export default function Dashboard({ participants, balances, totalSpending, settl
             const owedBy = settlements.filter(s => s.to === p.id);
 
             const smartText = isOwed
-              ? `${p.name} is waiting for ${formatPrice(bal)} in total settlements.`
+              ? t('dashboard.isOwed',      { name: p.name, amount: formatPrice(bal) })
               : owes
-                ? `${p.name} needs to pay others ${formatPrice(Math.abs(bal))} to settle up.`
-                : `${p.name} is all settled! No debts or credits.`;
+                ? t('dashboard.needsToPay', { name: p.name, amount: formatPrice(Math.abs(bal)) })
+                : t('dashboard.allSettled', { name: p.name });
 
             return (
               <div
@@ -185,12 +220,12 @@ export default function Dashboard({ participants, balances, totalSpending, settl
                   isLast ? 'bottom-full mb-2' : 'top-full mt-2'
                 )}>
                   {/* Header */}
-                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{p.name}'s Balance Details</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{p.name}{t('dashboard.balanceDetails')}</p>
 
                   {/* Owes section */}
                   {owesTo.length > 0 && (
                     <div className="mb-2">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-red-400 font-semibold mb-1">Owes</p>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-red-400 font-semibold mb-1">{t('dashboard.owes')}</p>
                       {owesTo.map(s => (
                         <div key={s.to} className="flex justify-between text-slate-600 dark:text-slate-300">
                           <span>→ {nameOf(s.to)}</span>
@@ -203,7 +238,7 @@ export default function Dashboard({ participants, balances, totalSpending, settl
                   {/* Owed-by section */}
                   {owedBy.length > 0 && (
                     <div className="mb-2">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-green-400 font-semibold mb-1">Owed by</p>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-green-400 font-semibold mb-1">{t('dashboard.owedBy')}</p>
                       {owedBy.map(s => (
                         <div key={s.from} className="flex justify-between text-slate-600 dark:text-slate-300">
                           <span>← {nameOf(s.from)}</span>

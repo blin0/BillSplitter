@@ -1,0 +1,70 @@
+{
+  "title": "Análisis",
+  "summary": "Resumen",
+  "group": "Grupo",
+  "selectGroup": "Seleccionar grupo",
+  "noGroups": "Únete o crea un grupo para ver análisis.",
+  "cat": {
+    "Dining": "Comidas",
+    "Coffee": "Café",
+    "Groceries": "Compras",
+    "Travel": "Transporte",
+    "Bills": "Facturas",
+    "Misc": "Otros",
+    "Tax": "Impuesto",
+    "Tip": "Propina"
+  },
+  "donut": {
+    "title": "Categorías",
+    "total": "Total",
+    "noExpenses": "Sin gastos aún",
+    "insightTop": "Tu categoría principal es {{cat}}, que representa el {{pct}}% del gasto total.",
+    "insightNone": "Añade gastos para ver el desglose por categorías."
+  },
+  "savings": {
+    "title": "Totales precisos",
+    "tracked": "registrado",
+    "tax": "Impuesto",
+    "tips": "Propinas",
+    "insight": "Has registrado {{amount}} en impuestos y propinas — {{pct}}% del gasto total.",
+    "acrossExpenses_one": "En {{count}} gasto con impuesto o propina",
+    "acrossExpenses_other": "En {{count}} gastos con impuesto o propina"
+  },
+  "peer": {
+    "title": "Dinámica de grupo",
+    "debtFlow": "Flujo de deuda",
+    "totalSpent": "Total gastado",
+    "noParticipants": "Sin participantes aún",
+    "whoPaysWho": "Quién paga a quién",
+    "morePayments_one": "+{{count}} pago más",
+    "morePayments_other": "+{{count}} pagos más",
+    "noSpending": "Sin gastos",
+    "isOwed": "Le deben",
+    "owes": "Debe",
+    "fullySettled": "✓ Saldado",
+    "pctSettled": "{{pct}}% saldado",
+    "splits_one": "{{count}} división",
+    "splits_other": "{{count}} divisiones",
+    "totalSpentLabel": "Total gastado:",
+    "pctOfTotal": "% de su total",
+    "insight": "El {{pct}}% de todas las divisiones en esta vista están saldadas.",
+    "insightNone": "Añade participantes para ver la dinámica."
+  },
+  "velocity": {
+    "title": "Velocidad de gasto",
+    "thirtyDay": "30 días",
+    "total": "Total",
+    "largeExpenses": "Gastos grandes",
+    "fxTitle": "Deriva de tipo de cambio",
+    "fxDesc_one": "{{count}} gasto se registró en moneda extranjera al tipo del día.",
+    "fxDesc_other": "{{count}} gastos se registraron en monedas extranjeras al tipo del día.",
+    "fxSuffix": "Si se convirtieran a los tipos actuales, el total sería",
+    "fxMore": "{{amount}} más de lo bloqueado.",
+    "fxLess": "{{amount}} menos de lo bloqueado.",
+    "insight": "El gasto ha {{dir}} un {{pct}}% respecto a los últimos 30 días.",
+    "up": "subido",
+    "down": "bajado",
+    "insightNone": "Historial insuficiente para calcular la tendencia."
+  },
+  "insightLabel": "Perspectiva inteligente"
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/cn';
 
 export interface ConfirmModalProps {
@@ -31,6 +32,7 @@ export default function ConfirmModal({
   error,
   loading = false,
 }: ConfirmModalProps) {
+  const { t } = useTranslation();
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   // Trap focus on mount; restore on unmount
@@ -88,7 +90,7 @@ export default function ConfirmModal({
           <button
             onClick={onCancel}
             className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X size={16} />
           </button>
@@ -116,7 +118,7 @@ export default function ConfirmModal({
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             ref={confirmRef}
@@ -131,7 +133,7 @@ export default function ConfirmModal({
                 : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]',
             )}
           >
-            {loading ? 'Please wait…' : confirmLabel}
+            {loading ? t('common.pleaseWait') : confirmLabel}
           </button>
         </div>
       </div>
