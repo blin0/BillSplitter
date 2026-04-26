@@ -746,7 +746,7 @@ function AppInner() {
 
         {/* ── Unified header — always visible ── */}
         <header className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
-          <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-2 min-w-0">
 
             {/* Mobile sidebar toggle (signed-in only) */}
             {isSignedIn && (
@@ -794,49 +794,52 @@ function AppInner() {
               </div>
             </div>
 
-            <CurrencyDropdown />
+            {/* Right-side controls — shrink-0 prevents any wrapping */}
+            <div className="flex items-center gap-2 shrink-0">
+              <CurrencyDropdown />
 
-            <LanguageSwitcher variant="dark" />
+              <LanguageSwitcher variant="dark" />
 
-            <button
-              onClick={toggle}
-              aria-label={dark ? t('nav.lightMode') : t('nav.darkMode')}
-              className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all duration-200 ease-in-out hover:scale-105 active:scale-95"
-            >
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            {isSignedIn ? (
-              <div className="flex items-center gap-2">
-                <UserAvatar
-                  src={profileAvatar}
-                  initial={(profileDisplayName ?? user.user_metadata?.full_name ?? 'U')[0].toUpperCase()}
-                  onClick={() => navigate('/profile')}
-                />
-                <button
-                  onClick={() => navigate('/profile')}
-                  className="hidden sm:flex items-center text-sm text-gray-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-[140px] truncate"
-                >
-                  <span className="truncate">
-                    {profileDisplayName || user.user_metadata?.full_name || 'User'}
-                  </span>
-                </button>
-                <button
-                  onClick={signOut}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <LogOut size={15} />
-                  <span className="hidden sm:inline">{t('nav.signOut')}</span>
-                </button>
-              </div>
-            ) : (
               <button
-                onClick={() => setShowSignIn(true)}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors"
+                onClick={toggle}
+                aria-label={dark ? t('nav.lightMode') : t('nav.darkMode')}
+                className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all duration-200 ease-in-out hover:scale-105 active:scale-95"
               >
-                {t('nav.signIn')}
+                {dark ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-            )}
+
+              {isSignedIn ? (
+                <div className="flex items-center gap-2">
+                  <UserAvatar
+                    src={profileAvatar}
+                    initial={(profileDisplayName ?? user.user_metadata?.full_name ?? 'U')[0].toUpperCase()}
+                    onClick={() => navigate('/profile')}
+                  />
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className="hidden sm:flex items-center text-sm text-gray-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-[140px] truncate"
+                  >
+                    <span className="truncate">
+                      {profileDisplayName || user.user_metadata?.full_name || 'User'}
+                    </span>
+                  </button>
+                  <button
+                    onClick={signOut}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <LogOut size={15} />
+                    <span className="hidden sm:inline">{t('nav.signOut')}</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowSignIn(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors"
+                >
+                  {t('nav.signIn')}
+                </button>
+              )}
+            </div>
           </div>
         </header>
 

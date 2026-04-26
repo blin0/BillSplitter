@@ -41,7 +41,13 @@ const SLICE_COLORS: Record<Cat, string> = {
 const TAX_COLOR = '#06b6d4';
 const TIP_COLOR = '#f59e0b';
 
-// ─── Theme hook ───────────────────────────────────────────────────────────────
+// Smooth ease matching Material Design "standard" curve
+const EASE_STD = [0.4, 0, 0.2, 1] as const;
+
+// Max peer rows shown before "See More"
+const MAX_PEERS = 5;
+
+// ─── Utility hooks ────────────────────────────────────────────────────────────
 
 function useIsDark(): boolean {
   const [isDark, setIsDark] = useState<boolean>(() =>
@@ -55,6 +61,29 @@ function useIsDark(): boolean {
     return () => obs.disconnect();
   }, []);
   return isDark;
+}
+
+/** Returns true when the viewport is < 768 px (same breakpoint as Tailwind md:) */
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler, { passive: true });
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
+/** Debounces a value — actual update fires after `delay` ms of inactivity. */
+function useDebounced<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
 }
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
@@ -236,6 +265,22 @@ function LineSkeleton() {
   );
 }
 
+function PeerBarSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[72, 55, 90, 40, 65].map((w, i) => (
+        <div key={i}>
+          <div className="flex items-center justify-between mb-1.5">
+            <Shimmer className="h-3 rounded-md" style={{ width: `${w * 0.6}%` }} />
+            <Shimmer className="h-3 rounded-md w-12" />
+          </div>
+          <Shimmer className="h-3 rounded-full" style={{ width: `${w}%`, animationDelay: `${i * 60}ms` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── InsightBadge ─────────────────────────────────────────────────────────────
 
 function InsightBadge({ insight }: { insight: string }) {
@@ -271,13 +316,14 @@ function InsightBadge({ insight }: { insight: string }) {
             initial={{ opacity: 0, y: -4, scale: 0.95 }}
             animate={{ opacity: 1, y: 0,  scale: 1    }}
             exit={{    opacity: 0, y: -4, scale: 0.95 }}
-            transition={{ duration: 0.14 }}
+            transition={{ duration: 0.14, ease: EASE_STD }}
             className="absolute top-full right-0 z-50 w-56 p-3 mt-1 rounded-xl border text-xs leading-relaxed shadow-2xl"
             style={{
               background:   'var(--analytics-tooltip-bg)',
               borderColor:  'var(--analytics-tooltip-border)',
               color:        'inherit',
               boxShadow:    '0 20px 60px rgba(109,40,217,0.15)',
+              willChange:   'transform, opacity',
             }}
           >
             <div className="flex items-start gap-2">
@@ -356,6 +402,7 @@ function WidgetDonut({ expenses, fmt, loading }: {
   loading:  boolean;
 }) {
   const { t } = useTranslation('analytics');
+  const isMobile    = useIsMobile();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const catData = useMemo(() => getCategoryData(expenses), [expenses]);
   const total   = useMemo(() => round2(expenses.reduce((s, e) => s + e.totalAmount, 0)), [expenses]);
@@ -385,13 +432,13 @@ function WidgetDonut({ expenses, fmt, loading }: {
         </div>
       ) : (
         <>
-          {/* ── Chart — fixed height, never compressed by the list below ── */}
+          {/* ── Chart — opacity-only entry (no scale = no layout thrash) ── */}
           <motion.div
             className="shrink-0 relative"
             style={{ height: 280 }}
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, ease: EASE_STD }}
           >
             <div
               className="relative h-full [&_svg]:outline-none [&_svg]:focus:outline-none [&_*:focus]:outline-none [&_*]:select-none"
@@ -422,10 +469,10 @@ function WidgetDonut({ expenses, fmt, loading }: {
                     paddingAngle={2}
                     isAnimationActive
                     animationBegin={0}
-                    animationDuration={900}
+                    animationDuration={700}
                     animationEasing="ease-out"
-                    onMouseEnter={(_, i) => setHoveredIdx(i)}
-                    onMouseLeave={() => setHoveredIdx(null)}
+                    onMouseEnter={isMobile ? undefined : (_, i) => setHoveredIdx(i)}
+                    onMouseLeave={isMobile ? undefined : () => setHoveredIdx(null)}
                   >
                     {catData.map((c, i) => (
                       <Cell
@@ -433,7 +480,11 @@ function WidgetDonut({ expenses, fmt, loading }: {
                         fill={c.color}
                         opacity={hoveredIdx === null || hoveredIdx === i ? 1 : 0.3}
                         filter="url(#donutGlow)"
-                        style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
+                        style={{
+                          cursor:     'pointer',
+                          transition: 'opacity 150ms cubic-bezier(0.4,0,0.2,1)',
+                          willChange: 'opacity',
+                        }}
                       />
                     ))}
                   </Pie>
@@ -449,8 +500,9 @@ function WidgetDonut({ expenses, fmt, loading }: {
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.14 }}
+                      transition={{ duration: 0.14, ease: EASE_STD }}
                       className="text-center px-2"
+                      style={{ willChange: 'transform, opacity' }}
                     >
                       <p className="text-[9px] text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-0.5 leading-none">{t(`cat.${hovered.category}`)}</p>
                       <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">{fmt(hovered.amount)}</p>
@@ -462,8 +514,9 @@ function WidgetDonut({ expenses, fmt, loading }: {
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.14 }}
+                      transition={{ duration: 0.14, ease: EASE_STD }}
                       className="text-center"
+                      style={{ willChange: 'transform, opacity' }}
                     >
                       <p className="text-[9px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-0.5 leading-none">{t('donut.total')}</p>
                       <p className="text-base font-bold text-gray-900 dark:text-white leading-tight">{fmt(total)}</p>
@@ -474,17 +527,18 @@ function WidgetDonut({ expenses, fmt, loading }: {
             </div>
           </motion.div>
 
-          {/* ── Category list — grows naturally; pushes card border down ── */}
+          {/* ── Category list — static values on mobile (no hover needed) ── */}
           <div className="flex-grow mt-8 space-y-1">
             {catData.map((c, i) => (
               <div
                 key={c.category}
                 className={cn(
                   'flex items-center gap-2 rounded-lg px-2 py-1 transition-all cursor-default select-none',
-                  hoveredIdx === i ? 'bg-black/5 dark:bg-white/8' : hoveredIdx !== null ? 'opacity-35' : '',
+                  !isMobile && hoveredIdx === i ? 'bg-black/5 dark:bg-white/8' : '',
+                  !isMobile && hoveredIdx !== null && hoveredIdx !== i ? 'opacity-35' : '',
                 )}
-                onMouseEnter={() => setHoveredIdx(i)}
-                onMouseLeave={() => setHoveredIdx(null)}
+                onMouseEnter={isMobile ? undefined : () => setHoveredIdx(i)}
+                onMouseLeave={isMobile ? undefined : () => setHoveredIdx(null)}
               >
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
                 <span className="text-xs text-gray-500 dark:text-slate-400 flex-1">{t(`cat.${c.category}`)}</span>
@@ -584,23 +638,36 @@ function WidgetPeer({ participants, expenses, fmt, loading }: {
   fmt:          (n: number) => string;
   loading:      boolean;
 }) {
-  const { t } = useTranslation('analytics');
-  const [peerView,   setPeerView  ] = useState<'debt' | 'spent'>('debt');
+  const { t }    = useTranslation('analytics');
+  const isMobile = useIsMobile();
+
+  // Toggle state — UI updates immediately; data-heavy switch debounced by 300 ms
+  const [peerViewRaw,  setPeerViewRaw ] = useState<'debt' | 'spent'>('debt');
+  const peerView = useDebounced(peerViewRaw, 300);
+
   const [hoveredCat, setHoveredCat] = useState<string | null>(null);
-  const [tip,        setTip       ] = useState<PeerTip | null>(null);
+  const [tip,        setTip        ] = useState<PeerTip | null>(null);
+  const [showAll,    setShowAll    ] = useState(false);
+
+  // Reset "show all" when the view changes
+  useEffect(() => setShowAll(false), [peerView]);
 
   const peers     = useMemo(() => getPeerData(participants, expenses),     [participants, expenses]);
   const breakdown = useMemo(() => getPeerBreakdown(participants, expenses), [participants, expenses]);
 
-  const maxAbs  = Math.max(...peers.map(p => Math.abs(p.balance)), 1);
-  const maxTotal = Math.max(...breakdown.map(b => b.total), 1);
-
+  const maxAbs   = useMemo(() => Math.max(...peers.map(p => Math.abs(p.balance)), 1),  [peers]);
+  const maxTotal = useMemo(() => Math.max(...breakdown.map(b => b.total), 1),          [breakdown]);
 
   const settlements = useMemo(() => {
     const balances = computeBalances(participants, expenses);
     return simplifyDebts(balances);
   }, [participants, expenses]);
+
   const nameOf = (id: string) => participants.find(p => p.id === id)?.name ?? '?';
+
+  // Truncated peer lists
+  const visiblePeers     = showAll ? peers     : peers.slice(0, MAX_PEERS);
+  const visibleBreakdown = showAll ? breakdown : breakdown.slice(0, MAX_PEERS);
 
   const overallSettle = peers.length > 0
     ? round2(peers.reduce((s, p) => s + p.settleRate, 0) / peers.length)
@@ -609,19 +676,19 @@ function WidgetPeer({ participants, expenses, fmt, loading }: {
     ? t('peer.insight', { pct: overallSettle })
     : t('peer.insightNone');
 
-  // All categories that appear in the breakdown (for legend)
   const activeCats = CATS.filter(cat => breakdown.some(b => b.catEntries.some(c => c.cat === cat)));
 
-  const tipPortal = typeof document !== 'undefined' ? createPortal(
+  // Hover tooltip portal — disabled on mobile (avoids ghost clicks)
+  const tipPortal = !isMobile && typeof document !== 'undefined' ? createPortal(
     <AnimatePresence>
       {tip && (
         <motion.div
           className="fixed z-[9999] pointer-events-none"
-          style={{ left: Math.max(4, tip.x - 244), top: tip.y - 12 }}
+          style={{ left: Math.max(4, tip.x - 244), top: tip.y - 12, willChange: 'transform, opacity' }}
           initial={{ opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.94 }}
-          transition={{ duration: 0.1 }}
+          transition={{ duration: 0.1, ease: EASE_STD }}
         >
           <div
             className="rounded-xl px-3 py-2.5 shadow-2xl text-xs"
@@ -676,211 +743,271 @@ function WidgetPeer({ participants, expenses, fmt, loading }: {
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       {tipPortal}
-        <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full bg-indigo-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full bg-indigo-500/10 blur-3xl" />
 
-        {/* Header */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="p-1.5 rounded-lg bg-indigo-500/20 shrink-0">
-            <Users size={13} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1">{t('peer.title')}</span>
-          <div
-            className="flex items-center p-0.5 rounded-lg border"
-            style={{ background: 'var(--analytics-toggle-bg)', borderColor: 'var(--analytics-toggle-border)' }}
-          >
-            {(['debt', 'spent'] as const).map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setPeerView(v)}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all',
-                  peerView === v
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-900/60'
-                    : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200',
-                )}
-              >
-                {v === 'debt' ? t('peer.debtFlow') : t('peer.totalSpent')}
-              </button>
-            ))}
-          </div>
-          <InsightBadge insight={insight} />
+      {/* Header */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="p-1.5 rounded-lg bg-indigo-500/20 shrink-0">
+          <Users size={13} className="text-indigo-600 dark:text-indigo-400" />
         </div>
+        <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1">{t('peer.title')}</span>
+        <div
+          className="flex items-center p-0.5 rounded-lg border"
+          style={{ background: 'var(--analytics-toggle-bg)', borderColor: 'var(--analytics-toggle-border)' }}
+        >
+          {(['debt', 'spent'] as const).map(v => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setPeerViewRaw(v)}
+              className={cn(
+                'px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all',
+                peerViewRaw === v
+                  ? 'bg-violet-600 text-white shadow-sm shadow-violet-900/60'
+                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200',
+              )}
+            >
+              {v === 'debt' ? t('peer.debtFlow') : t('peer.totalSpent')}
+            </button>
+          ))}
+        </div>
+        <InsightBadge insight={insight} />
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 min-h-[160px]">
-          {loading ? (
-            <div className="space-y-3">{[1, 2, 3].map(i => <Shimmer key={i} className="h-10" />)}</div>
-          ) : peers.length === 0 ? (
-            <p className="text-gray-400 dark:text-slate-500 text-sm text-center py-6">{t('peer.noParticipants')}</p>
-          ) : (
-            <AnimatePresence mode="wait">
+      {/* Body */}
+      <div className="flex-1 min-h-[160px]">
+        {loading ? (
+          <PeerBarSkeleton />
+        ) : peers.length === 0 ? (
+          <p className="text-gray-400 dark:text-slate-500 text-sm text-center py-6">{t('peer.noParticipants')}</p>
+        ) : (
+          <AnimatePresence mode="wait">
 
-              {/* ── Debt Flow ── */}
-              {peerView === 'debt' && (
-                <motion.div
-                  key="debt"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="flex flex-col gap-3"
-                >
-                  {peers.map(p => {
-                    const barW     = (Math.abs(p.balance) / maxAbs) * 45;
-                    const isCredit = p.balance >= 0;
-                    return (
-                      <div
-                        key={p.id}
-                        className="cursor-default"
-                        onMouseMove={e => setTip({ kind: 'peer', x: e.clientX, y: e.clientY, peer: p })}
-                        onMouseLeave={() => setTip(null)}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-700 dark:text-slate-300 font-medium truncate max-w-[140px]">{p.name}</span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{p.settleRate}%</span>
-                            <span className={cn('text-xs font-bold tabular-nums min-w-[52px] text-right', isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-                              {isCredit ? '+' : ''}{p.balance.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="relative h-1.5 flex">
-                          <div className="flex-1 flex items-center justify-end">
-                            {!isCredit && <div className="h-full rounded-l-full bg-rose-600 dark:bg-rose-500/80 transition-all duration-700" style={{ width: `${barW}%` }} />}
-                          </div>
-                          <div className="w-px bg-black/15 dark:bg-white/20 shrink-0" />
-                          <div className="flex-1 flex items-center justify-start">
-                            {isCredit && <div className="h-full rounded-r-full bg-emerald-600 dark:bg-emerald-500/80 transition-all duration-700" style={{ width: `${barW}%` }} />}
-                          </div>
+            {/* ── Debt Flow ── */}
+            {peerView === 'debt' && (
+              <motion.div
+                key="debt"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: EASE_STD }}
+                className="flex flex-col gap-3"
+              >
+                {visiblePeers.map(p => {
+                  const barW     = (Math.abs(p.balance) / maxAbs) * 45;
+                  const isCredit = p.balance >= 0;
+                  return (
+                    <div
+                      key={p.id}
+                      className="cursor-default"
+                      onMouseMove={isMobile ? undefined : e => setTip({ kind: 'peer', x: e.clientX, y: e.clientY, peer: p })}
+                      onMouseLeave={isMobile ? undefined : () => setTip(null)}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-700 dark:text-slate-300 font-medium truncate max-w-[140px]">{p.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-gray-400 dark:text-slate-500">{p.settleRate}%</span>
+                          <span className={cn('text-xs font-bold tabular-nums min-w-[52px] text-right', isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                            {isCredit ? '+' : ''}{p.balance.toFixed(2)}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-
-                  {settlements.length > 0 && (
-                    <div className="pt-3 border-t" style={{ borderColor: 'var(--analytics-divider)' }}>
-                      <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">{t('peer.whoPaysWho')}</p>
-                      <div className="space-y-1.5">
-                        {settlements.slice(0, 4).map((s, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <div className="w-1 h-1 rounded-full bg-rose-500 shrink-0" />
-                            <span className="text-xs">
-                              <span className="text-rose-600 dark:text-rose-300 font-medium">{nameOf(s.from)}</span>
-                              <span className="text-gray-400 dark:text-slate-500 mx-1">→</span>
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">{nameOf(s.to)}</span>
-                              <span className="text-gray-400 dark:text-slate-500 mx-1">·</span>
-                              <span className="text-violet-600 dark:text-violet-400 font-bold">{fmt(s.amount)}</span>
-                            </span>
-                          </div>
-                        ))}
-                        {settlements.length > 4 && (
-                          <p className="text-[10px] text-gray-400 dark:text-slate-500 pl-3">{t('peer.morePayments', { count: settlements.length - 4 })}</p>
-                        )}
+                      <div className="relative h-1.5 flex">
+                        <div className="flex-1 flex items-center justify-end">
+                          {!isCredit && (
+                            <div
+                              className="h-full rounded-l-full bg-rose-600 dark:bg-rose-500/80"
+                              style={{
+                                width:      `${barW}%`,
+                                transition: 'width 400ms cubic-bezier(0.4,0,0.2,1)',
+                                willChange: 'width',
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="w-px bg-black/15 dark:bg-white/20 shrink-0" />
+                        <div className="flex-1 flex items-center justify-start">
+                          {isCredit && (
+                            <div
+                              className="h-full rounded-r-full bg-emerald-600 dark:bg-emerald-500/80"
+                              style={{
+                                width:      `${barW}%`,
+                                transition: 'width 400ms cubic-bezier(0.4,0,0.2,1)',
+                                willChange: 'width',
+                              }}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-                </motion.div>
-              )}
+                  );
+                })}
 
-              {/* ── Total Spent ── */}
-              {peerView === 'spent' && (
-                <motion.div
-                  key="spent"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="flex flex-col gap-4"
-                >
-                  {breakdown.map(b => (
-                    <div key={b.id}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs text-gray-700 dark:text-slate-300 font-medium truncate max-w-[160px]">{b.name}</span>
-                        <span className="text-xs font-bold text-gray-800 dark:text-slate-200 tabular-nums shrink-0">{fmt(b.total)}</span>
-                      </div>
+                {/* See More / Less toggle */}
+                {peers.length > MAX_PEERS && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(s => !s)}
+                    className="mt-1 text-[11px] text-violet-500 dark:text-violet-400 hover:underline self-start"
+                  >
+                    {showAll
+                      ? t('peer.showLess', { defaultValue: 'Show less' })
+                      : t('peer.showMore', { count: peers.length - MAX_PEERS, defaultValue: `+${peers.length - MAX_PEERS} more` })}
+                  </button>
+                )}
 
-                      {b.total < 0.01 ? (
-                        <div className="h-3 rounded-full flex items-center px-2" style={{ background: 'var(--analytics-sub-row)' }}>
-                          <span className="text-[9px] text-gray-400 dark:text-slate-600">{t('peer.noSpending')}</span>
+                {settlements.length > 0 && (
+                  <div className="pt-3 border-t" style={{ borderColor: 'var(--analytics-divider)' }}>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">{t('peer.whoPaysWho')}</p>
+                    <div className="space-y-1.5">
+                      {settlements.slice(0, 4).map((s, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <div className="w-1 h-1 rounded-full bg-rose-500 shrink-0" />
+                          <span className="text-xs">
+                            <span className="text-rose-600 dark:text-rose-300 font-medium">{nameOf(s.from)}</span>
+                            <span className="text-gray-400 dark:text-slate-500 mx-1">→</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">{nameOf(s.to)}</span>
+                            <span className="text-gray-400 dark:text-slate-500 mx-1">·</span>
+                            <span className="text-violet-600 dark:text-violet-400 font-bold">{fmt(s.amount)}</span>
+                          </span>
                         </div>
-                      ) : (
-                        <div className="flex h-3 rounded-full overflow-hidden gap-px">
-                          {b.catEntries.map(c => {
-                            const w = (c.amount / maxTotal) * 100;
-                            if (w < 0.5) return null;
-                            const pct = round2((c.amount / b.total) * 100);
-                            return (
-                              <motion.div
-                                key={c.cat}
-                                layout
-                                initial={{ width: 0 }}
-                                animate={{ width: `${w}%`, opacity: hoveredCat && hoveredCat !== c.cat ? 0.2 : 1 }}
-                                transition={{ duration: 0.5, ease: 'easeOut' }}
-                                className="h-full shrink-0 cursor-default"
-                                style={{ background: c.color }}
-                                onMouseMove={e => { setHoveredCat(c.cat); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: c.cat, amount: c.amount, pct, color: c.color }); }}
-                                onMouseLeave={() => { setHoveredCat(null); setTip(null); }}
-                              />
-                            );
-                          })}
-                          {b.taxAmt > 0.01 && (
-                            <motion.div
-                              layout
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(b.taxAmt / maxTotal) * 100}%`, opacity: hoveredCat && hoveredCat !== '__tax__' ? 0.2 : 1 }}
-                              transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
-                              className="h-full shrink-0 cursor-default"
-                              style={{ background: TAX_COLOR }}
-                              onMouseMove={e => { setHoveredCat('__tax__'); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: 'Tax', amount: b.taxAmt, pct: round2((b.taxAmt / b.total) * 100), color: TAX_COLOR }); }}
-                              onMouseLeave={() => { setHoveredCat(null); setTip(null); }}
-                            />
-                          )}
-                          {b.tipAmt > 0.01 && (
-                            <motion.div
-                              layout
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(b.tipAmt / maxTotal) * 100}%`, opacity: hoveredCat && hoveredCat !== '__tip__' ? 0.2 : 1 }}
-                              transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
-                              className="h-full shrink-0 cursor-default"
-                              style={{ background: TIP_COLOR }}
-                              onMouseMove={e => { setHoveredCat('__tip__'); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: 'Tip', amount: b.tipAmt, pct: round2((b.tipAmt / b.total) * 100), color: TIP_COLOR }); }}
-                              onMouseLeave={() => { setHoveredCat(null); setTip(null); }}
-                            />
-                          )}
-                        </div>
+                      ))}
+                      {settlements.length > 4 && (
+                        <p className="text-[10px] text-gray-400 dark:text-slate-500 pl-3">{t('peer.morePayments', { count: settlements.length - 4 })}</p>
                       )}
                     </div>
-                  ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
 
-                  {/* Legend */}
-                  <div className="pt-2 border-t flex flex-wrap gap-x-3 gap-y-1" style={{ borderColor: 'var(--analytics-divider)' }}>
-                    {activeCats.map(cat => (
-                      <div key={cat} className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SLICE_COLORS[cat] }} />
-                        <span className="text-[9px] text-gray-400 dark:text-slate-500">{t(`cat.${cat}`)}</span>
+            {/* ── Total Spent ── */}
+            {peerView === 'spent' && (
+              <motion.div
+                key="spent"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: EASE_STD }}
+                className="flex flex-col gap-4"
+              >
+                {visibleBreakdown.map((b, rowIdx) => (
+                  <div key={b.id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-gray-700 dark:text-slate-300 font-medium truncate max-w-[160px]">{b.name}</span>
+                      <span className="text-xs font-bold text-gray-800 dark:text-slate-200 tabular-nums shrink-0">{fmt(b.total)}</span>
+                    </div>
+
+                    {b.total < 0.01 ? (
+                      <div className="h-3 rounded-full flex items-center px-2" style={{ background: 'var(--analytics-sub-row)' }}>
+                        <span className="text-[9px] text-gray-400 dark:text-slate-600">{t('peer.noSpending')}</span>
                       </div>
-                    ))}
-                    {breakdown.some(b => b.taxAmt > 0.01) && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: TAX_COLOR }} />
-                        <span className="text-[9px] text-gray-400 dark:text-slate-500">{t('cat.Tax')}</span>
-                      </div>
-                    )}
-                    {breakdown.some(b => b.tipAmt > 0.01) && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: TIP_COLOR }} />
-                        <span className="text-[9px] text-gray-400 dark:text-slate-500">{t('cat.Tip')}</span>
+                    ) : (
+                      <div className="flex h-3 rounded-full overflow-hidden gap-px">
+                        {b.catEntries.map((c, segIdx) => {
+                          const w = (c.amount / maxTotal) * 100;
+                          if (w < 0.5) return null;
+                          const pct = round2((c.amount / b.total) * 100);
+                          // On mobile: all segments fade in together; on desktop: stagger up to 200ms
+                          const delay = isMobile ? 0 : Math.min((rowIdx * 2 + segIdx) * 0.03, 0.2);
+                          return (
+                            <motion.div
+                              key={c.cat}
+                              initial={{ scaleX: 0, opacity: 0 }}
+                              animate={{
+                                scaleX: 1,
+                                opacity: hoveredCat && hoveredCat !== c.cat ? 0.2 : 1,
+                              }}
+                              transition={{
+                                scaleX: { duration: 0.45, ease: EASE_STD, delay },
+                                opacity: { duration: 0.2 },
+                              }}
+                              className="h-full shrink-0 cursor-default"
+                              style={{
+                                width:           `${w}%`,
+                                transformOrigin: 'left',
+                                willChange:      'transform, opacity',
+                                background:      c.color,
+                              }}
+                              onMouseMove={isMobile ? undefined : e => { setHoveredCat(c.cat); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: c.cat, amount: c.amount, pct, color: c.color }); }}
+                              onMouseLeave={isMobile ? undefined : () => { setHoveredCat(null); setTip(null); }}
+                            />
+                          );
+                        })}
+                        {b.taxAmt > 0.01 && (() => {
+                          const delay = isMobile ? 0 : Math.min(rowIdx * 0.06 + 0.05, 0.2);
+                          return (
+                            <motion.div
+                              initial={{ scaleX: 0, opacity: 0 }}
+                              animate={{ scaleX: 1, opacity: hoveredCat && hoveredCat !== '__tax__' ? 0.2 : 1 }}
+                              transition={{ scaleX: { duration: 0.45, ease: EASE_STD, delay }, opacity: { duration: 0.2 } }}
+                              className="h-full shrink-0 cursor-default"
+                              style={{ width: `${(b.taxAmt / maxTotal) * 100}%`, transformOrigin: 'left', willChange: 'transform, opacity', background: TAX_COLOR }}
+                              onMouseMove={isMobile ? undefined : e => { setHoveredCat('__tax__'); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: 'Tax', amount: b.taxAmt, pct: round2((b.taxAmt / b.total) * 100), color: TAX_COLOR }); }}
+                              onMouseLeave={isMobile ? undefined : () => { setHoveredCat(null); setTip(null); }}
+                            />
+                          );
+                        })()}
+                        {b.tipAmt > 0.01 && (() => {
+                          const delay = isMobile ? 0 : Math.min(rowIdx * 0.06 + 0.1, 0.2);
+                          return (
+                            <motion.div
+                              initial={{ scaleX: 0, opacity: 0 }}
+                              animate={{ scaleX: 1, opacity: hoveredCat && hoveredCat !== '__tip__' ? 0.2 : 1 }}
+                              transition={{ scaleX: { duration: 0.45, ease: EASE_STD, delay }, opacity: { duration: 0.2 } }}
+                              className="h-full shrink-0 cursor-default"
+                              style={{ width: `${(b.tipAmt / maxTotal) * 100}%`, transformOrigin: 'left', willChange: 'transform, opacity', background: TIP_COLOR }}
+                              onMouseMove={isMobile ? undefined : e => { setHoveredCat('__tip__'); setTip({ kind: 'seg', x: e.clientX, y: e.clientY, name: 'Tip', amount: b.tipAmt, pct: round2((b.tipAmt / b.total) * 100), color: TIP_COLOR }); }}
+                              onMouseLeave={isMobile ? undefined : () => { setHoveredCat(null); setTip(null); }}
+                            />
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
-                </motion.div>
-              )}
+                ))}
 
-            </AnimatePresence>
-          )}
-        </div>
+                {/* See More / Less toggle */}
+                {breakdown.length > MAX_PEERS && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(s => !s)}
+                    className="mt-1 text-[11px] text-violet-500 dark:text-violet-400 hover:underline self-start"
+                  >
+                    {showAll
+                      ? t('peer.showLess', { defaultValue: 'Show less' })
+                      : t('peer.showMore', { count: breakdown.length - MAX_PEERS, defaultValue: `+${breakdown.length - MAX_PEERS} more` })}
+                  </button>
+                )}
+
+                {/* Legend — always visible on mobile since there are no hover tooltips */}
+                <div className="pt-2 border-t flex flex-wrap gap-x-3 gap-y-1" style={{ borderColor: 'var(--analytics-divider)' }}>
+                  {activeCats.map(cat => (
+                    <div key={cat} className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SLICE_COLORS[cat] }} />
+                      <span className="text-[9px] text-gray-400 dark:text-slate-500">{t(`cat.${cat}`)}</span>
+                    </div>
+                  ))}
+                  {breakdown.some(b => b.taxAmt > 0.01) && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: TAX_COLOR }} />
+                      <span className="text-[9px] text-gray-400 dark:text-slate-500">{t('cat.Tax')}</span>
+                    </div>
+                  )}
+                  {breakdown.some(b => b.tipAmt > 0.01) && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: TIP_COLOR }} />
+                      <span className="text-[9px] text-gray-400 dark:text-slate-500">{t('cat.Tip')}</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        )}
       </div>
+    </div>
   );
 }
 
@@ -894,7 +1021,8 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
   currency: string;
   isDark:   boolean;
 }) {
-  const { t } = useTranslation('analytics');
+  const { t }    = useTranslation('analytics');
+  const isMobile = useIsMobile();
   const { data, curr, velocity } = useMemo(() => getVelocityData(expenses), [expenses]);
   const { impact: fxImpact, count: fxCount } = useMemo(() => getFXImpact(expenses, convert, currency), [expenses, convert, currency]);
   const isUp     = velocity !== null && velocity > 0;
@@ -966,43 +1094,46 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
             <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="day" tick={{ fill: tickFill, fontSize: 9 }} tickLine={false} axisLine={false} interval={6} />
             <YAxis width={62} tick={{ fill: tickFill, fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={v => fmt(v as number)} />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const dayExps = (dateExpenseMap[label as string] ?? [])
-                  .sort((a, b) => b.totalAmount - a.totalAmount)
-                  .slice(0, 3);
-                return (
-                  <div
-                    className="rounded-xl px-3 py-2.5 shadow-2xl text-xs min-w-[160px]"
-                    style={{
-                      background:  'var(--analytics-tooltip-bg)',
-                      border:      '1px solid var(--analytics-tooltip-border)',
-                      boxShadow:   '0 20px 60px rgba(109,40,217,0.15)',
-                    }}
-                  >
-                    <p className="text-gray-400 dark:text-slate-400 mb-0.5">{label as string}</p>
-                    <p className="text-violet-600 dark:text-violet-300 font-bold mb-2">{fmt((payload[0] as { value: number }).value)}</p>
-                    {dayExps.length > 0 && (
-                      <div className="space-y-1 border-t pt-2" style={{ borderColor: 'var(--analytics-divider)' }}>
-                        <p className="text-[9px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{t('velocity.largeExpenses')}</p>
-                        {dayExps.map(e => (
-                          <div key={e.id} className="flex items-center justify-between gap-3">
-                            <span className="text-gray-500 dark:text-slate-400 truncate max-w-[100px]">{e.description}</span>
-                            <span className="text-gray-800 dark:text-slate-200 font-semibold shrink-0">{fmt(e.totalAmount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-            />
+            {/* Disable Recharts hover tooltip on mobile — touch events fire ghost clicks */}
+            {!isMobile && (
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const dayExps = (dateExpenseMap[label as string] ?? [])
+                    .sort((a, b) => b.totalAmount - a.totalAmount)
+                    .slice(0, 3);
+                  return (
+                    <div
+                      className="rounded-xl px-3 py-2.5 shadow-2xl text-xs min-w-[160px]"
+                      style={{
+                        background:  'var(--analytics-tooltip-bg)',
+                        border:      '1px solid var(--analytics-tooltip-border)',
+                        boxShadow:   '0 20px 60px rgba(109,40,217,0.15)',
+                      }}
+                    >
+                      <p className="text-gray-400 dark:text-slate-400 mb-0.5">{label as string}</p>
+                      <p className="text-violet-600 dark:text-violet-300 font-bold mb-2">{fmt((payload[0] as { value: number }).value)}</p>
+                      {dayExps.length > 0 && (
+                        <div className="space-y-1 border-t pt-2" style={{ borderColor: 'var(--analytics-divider)' }}>
+                          <p className="text-[9px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{t('velocity.largeExpenses')}</p>
+                          {dayExps.map(e => (
+                            <div key={e.id} className="flex items-center justify-between gap-3">
+                              <span className="text-gray-500 dark:text-slate-400 truncate max-w-[100px]">{e.description}</span>
+                              <span className="text-gray-800 dark:text-slate-200 font-semibold shrink-0">{fmt(e.totalAmount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            )}
             <Area
               type="monotone" dataKey="amount"
               stroke="#8b5cf6" strokeWidth={2.5}
               fill="url(#velGrad)" filter="url(#lineGlow)"
-              dot={false} activeDot={{ r: 4, fill: '#a78bfa', strokeWidth: 0 }}
+              dot={false} activeDot={isMobile ? false : { r: 4, fill: '#a78bfa', strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -1073,7 +1204,6 @@ export default function Analytics({ groups }: Props) {
     else if (selectedGroupId) loadGroup(selectedGroupId);
   }, [view, selectedGroupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Selecting a group while on Summary auto-switches to Group view
   function handleGroupSelect(id: string) {
     setSelectedGroupId(id);
     if (view === 'summary') setView('group');
@@ -1131,7 +1261,6 @@ export default function Analytics({ groups }: Props) {
             ))}
           </div>
 
-          {/* Group dropdown — always visible; selecting on Summary auto-switches to Group */}
           {groups.length > 0 && (
             <GroupDropdown
               groups={groups}

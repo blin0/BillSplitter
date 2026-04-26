@@ -28,6 +28,11 @@ interface Props {
    * compound container in ExpenseForm).
    */
   embedded?: boolean;
+  /**
+   * Compact mode: renders an icon-only trigger showing just the currency
+   * symbol. Used in the header on mobile viewports.
+   */
+  compact?: boolean;
 }
 
 export default function CurrencySelect({
@@ -39,6 +44,7 @@ export default function CurrencySelect({
   alignRight = false,
   onOpenChange,
   embedded = false,
+  compact = false,
 }: Props) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
@@ -147,47 +153,70 @@ export default function CurrencySelect({
       ref={containerRef}
     >
       {/* ── Trigger ── */}
-      <button
-        type="button"
-        onClick={() => updateOpen(!open)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        className={cn(
-          'flex items-center gap-1.5 pl-2.5 pr-2 py-2 text-sm font-medium w-full',
-          /* Standard (non-embedded) styles */
-          !embedded && [
-            'border relative',
-            open ? 'rounded-t-lg rounded-b-none border-b-0 pb-[9px]' : 'rounded-lg',
-            'border-gray-200 dark:border-slate-700',
+      {compact ? (
+        /* Icon-only compact trigger for mobile header */
+        <button
+          type="button"
+          onClick={() => updateOpen(!open)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          className={cn(
+            'flex items-center justify-center p-2 rounded-lg text-sm font-semibold',
+            'border border-gray-200 dark:border-slate-700',
             'bg-white dark:bg-slate-800',
             'hover:bg-gray-50 dark:hover:bg-slate-700',
-            'focus-visible:ring-2 focus-visible:ring-violet-400 dark:focus-visible:ring-offset-slate-900',
-          ],
-          /* Embedded — no own border/bg; parent container provides chrome */
-          embedded && [
-            'rounded-lg bg-transparent',
-            'hover:bg-slate-50 dark:hover:bg-slate-700/40',
-          ],
-          'text-gray-700 dark:text-slate-200',
-          'focus:outline-none',
-          'transition-all active:scale-95'
-        )}
-      >
-        {current?.symbol && (
-          <span className="font-semibold text-violet-600 dark:text-violet-400 shrink-0">
-            {current.symbol}
-          </span>
-        )}
-        <span className="flex-1 text-left truncate">{value}</span>
-        <ChevronDown
-          size={13}
-          className={cn(
-            'text-gray-400 dark:text-slate-500 transition-transform shrink-0',
-            open && 'rotate-180'
+            'text-violet-600 dark:text-violet-400',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
+            'transition-all active:scale-95'
           )}
-        />
-      </button>
+          aria-label={`Currency: ${value}`}
+        >
+          {current?.symbol ?? value.slice(0, 1)}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => updateOpen(!open)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          className={cn(
+            'flex items-center gap-1.5 pl-2.5 pr-2 py-2 text-sm font-medium w-full',
+            /* Standard (non-embedded) styles */
+            !embedded && [
+              'border relative',
+              open ? 'rounded-t-lg rounded-b-none border-b-0 pb-[9px]' : 'rounded-lg',
+              'border-gray-200 dark:border-slate-700',
+              'bg-white dark:bg-slate-800',
+              'hover:bg-gray-50 dark:hover:bg-slate-700',
+              'focus-visible:ring-2 focus-visible:ring-violet-400 dark:focus-visible:ring-offset-slate-900',
+            ],
+            /* Embedded — no own border/bg; parent container provides chrome */
+            embedded && [
+              'rounded-lg bg-transparent',
+              'hover:bg-slate-50 dark:hover:bg-slate-700/40',
+            ],
+            'text-gray-700 dark:text-slate-200',
+            'focus:outline-none',
+            'transition-all active:scale-95'
+          )}
+        >
+          {current?.symbol && (
+            <span className="font-semibold text-violet-600 dark:text-violet-400 shrink-0">
+              {current.symbol}
+            </span>
+          )}
+          <span className="flex-1 text-left truncate">{value}</span>
+          <ChevronDown
+            size={13}
+            className={cn(
+              'text-gray-400 dark:text-slate-500 transition-transform shrink-0',
+              open && 'rotate-180'
+            )}
+          />
+        </button>
+      )}
 
       {/* ── Panel ── */}
       {open && (

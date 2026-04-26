@@ -13,19 +13,28 @@ export default function CurrencyDropdown() {
       .map(([code, meta]) => ({ code, label: meta.label, symbol: meta.symbol, region }))
   );
 
+  const sharedProps = {
+    options,
+    value: currency,
+    onChange: (code: string) => setCurrency(code as CurrencyCode),
+    listMaxHeight: 'max-h-72' as const,
+    alignRight: true,
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="hidden sm:inline text-xs text-gray-400 dark:text-slate-500 font-medium">
-        Currency
-      </span>
-      <CurrencySelect
-        options={options}
-        value={currency}
-        onChange={code => setCurrency(code as CurrencyCode)}
-        className="w-28"
-        listMaxHeight="max-h-72"
-        alignRight
-      />
-    </div>
+    <>
+      {/* Mobile (< md): symbol-only compact icon button */}
+      <div className="md:hidden">
+        <CurrencySelect {...sharedProps} compact />
+      </div>
+
+      {/* Desktop (≥ md): full "$ USD" label trigger */}
+      <div className="hidden md:flex items-center gap-2">
+        <span className="text-xs text-gray-400 dark:text-slate-500 font-medium">
+          Currency
+        </span>
+        <CurrencySelect {...sharedProps} className="w-28" />
+      </div>
+    </>
   );
 }

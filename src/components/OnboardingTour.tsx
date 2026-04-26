@@ -16,7 +16,7 @@ interface TourStep {
 }
 
 const PAD       = 10;   // px padding around highlighted element
-const TOOLTIP_W = 288;  // px width of tooltip bubble
+const TOOLTIP_W = 288;  // px max-width of tooltip bubble (clamped to 90vw)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,8 +125,10 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
     }
   }
 
-  // Tooltip position — keeps the bubble on-screen
+  // Tooltip position — keeps the bubble on-screen, clamped to 90vw
   function tooltipStyle(): React.CSSProperties {
+    const effectiveW = Math.min(TOOLTIP_W, window.innerWidth * 0.9);
+
     if (!rect) return { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' };
 
     const hl = {
@@ -137,9 +139,9 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
     };
 
     const clampX = (x: number) =>
-      Math.max(8, Math.min(x, window.innerWidth - TOOLTIP_W - 8));
+      Math.max(8, Math.min(x, window.innerWidth - effectiveW - 8));
 
-    const centreX = clampX(hl.left + (rect.width + PAD * 2) / 2 - TOOLTIP_W / 2);
+    const centreX = clampX(hl.left + (rect.width + PAD * 2) / 2 - effectiveW / 2);
 
     if (current.placement === 'bottom') {
       return { position: 'fixed', top: hl.bottom + 12, left: centreX };
@@ -160,17 +162,22 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
       <div className="absolute inset-0 bg-black/70" onClick={onDone} />
 
       <motion.div
-        className="relative w-full max-w-xs rounded-2xl overflow-hidden"
-        style={{ background: 'rgba(15,10,30,0.98)', border: '1px solid rgba(255,255,255,0.10)' }}
+        className="relative w-full max-w-xs rounded-2xl flex flex-col overflow-hidden"
+        style={{
+          background: 'rgba(15,10,30,0.98)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          maxWidth: '90vw',
+          maxHeight: '85vh',
+        }}
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
         animate={{ opacity: 1, scale: 1,    y: 0  }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         onClick={e => e.stopPropagation()}
       >
         {/* Top sheen */}
-        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-violet-600/15 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-violet-600/15 to-transparent pointer-events-none z-10" />
 
-        <div className="relative p-6">
+        <div className="relative p-6 overflow-y-auto flex-1 min-h-0">
           {/* Icon */}
           <div className="flex justify-center mb-4">
             <div className="p-3 rounded-2xl bg-violet-600/20 border border-violet-500/30">
@@ -266,10 +273,12 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
       {/* ── Tooltip bubble ── */}
       <motion.div
         key={step}
-        className="absolute rounded-2xl shadow-2xl overflow-hidden"
+        className="absolute rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{
           ...tooltipStyle(),
           width: TOOLTIP_W,
+          maxWidth: '90vw',
+          maxHeight: '85vh',
           pointerEvents: 'auto',
           background: 'rgba(15,10,30,0.97)',
           border: '1px solid rgba(255,255,255,0.10)',
@@ -280,11 +289,12 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
         onClick={e => e.stopPropagation()}
       >
         {/* Top sheen */}
-        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-violet-600/10 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-violet-600/10 to-transparent pointer-events-none z-10" />
 
-        <div className="relative p-5">
-          {/* Progress dots + close */}
-          <div className="flex items-center justify-between mb-3.5">
+        {/* Scrollable content area */}
+        <div className="relative flex flex-col flex-1 min-h-0 p-5">
+          {/* Progress dots + close — always at top */}
+          <div className="flex items-center justify-between mb-3.5 shrink-0">
             <div className="flex items-center gap-1.5">
               {STEPS.map((_, i) => (
                 <div
@@ -310,10 +320,14 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
             </button>
           </div>
 
-          <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{current.title}</h3>
-          <p className="text-xs text-slate-400 leading-relaxed mb-4">{current.body}</p>
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1 min-h-0 mb-4">
+            <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{current.title}</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">{current.body}</p>
+          </div>
 
-          <div className="flex items-center justify-between">
+          {/* Nav buttons — always pinned to bottom */}
+          <div className="flex items-center justify-between shrink-0 pt-1 border-t border-white/[0.06]">
             <button
               onClick={onDone}
               className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
