@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Loader2, Check, Camera, Globe, BarChart3, Sparkles, X as XIcon, Crown } from 'lucide-react';
+import { Save, Loader2, Check, Camera, Globe, BarChart3, Sparkles, X as XIcon, Crown, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
@@ -11,9 +12,11 @@ import { useSubscription } from '../hooks/useSubscription';
 import { STRIPE_PRICES, tierForPrice } from '../lib/stripe-prices';
 
 interface Props {
-  authEmail: string | null;
-  authName:  string | null;
-  userId:    string | null;
+  authEmail:                    string | null;
+  authName:                     string | null;
+  userId:                       string | null;
+  desktopExpenseModal:          boolean;
+  onDesktopExpenseModalChange:  (val: boolean) => void;
 }
 
 // ─── Brand icons ──────────────────────────────────────────────────────────────
@@ -115,6 +118,7 @@ function CurrencyCombobox({ value, onChange }: {
   value:    string;
   onChange: (c: CurrencyCode) => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [open,  setOpen ] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -168,9 +172,10 @@ function CurrencyCombobox({ value, onChange }: {
           <div className="p-2 border-b border-gray-100 dark:border-slate-700">
             <input
               autoFocus
+              name="currency-search"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search currencies…"
+              placeholder={t('profile.searchCurrencies')}
               className="w-full px-3 py-2 text-sm rounded-lg bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-slate-100 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
             />
           </div>
@@ -232,6 +237,7 @@ function AvatarUpload({ initials, avatarUrl, uploading, onUpload }: {
   uploading: boolean;
   onUpload:  (file: File) => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -248,19 +254,20 @@ function AvatarUpload({ initials, avatarUrl, uploading, onUpload }: {
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
         className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center gap-0.5 bg-black/0 group-hover:bg-black/50 transition-all text-transparent group-hover:text-white disabled:cursor-not-allowed"
-        aria-label="Change photo"
+        aria-label={t('profile.changePhoto')}
       >
         {uploading
           ? <Loader2 size={16} className="animate-spin" />
           : <Camera size={16} />}
         <span className="text-[9px] font-semibold leading-none">
-          {uploading ? 'Uploading' : 'Change'}
+          {uploading ? t('profile.uploading') : t('profile.change')}
         </span>
       </button>
 
       <input
         ref={inputRef}
         type="file"
+        name="avatar-upload"
         accept="image/*"
         className="hidden"
         onChange={e => {
@@ -275,7 +282,8 @@ function AvatarUpload({ initials, avatarUrl, uploading, onUpload }: {
 
 // ─── Profile page ─────────────────────────────────────────────────────────────
 
-export default function Profile({ authEmail, authName, userId }: Props) {
+export default function Profile({ authEmail, authName, userId, desktopExpenseModal, onDesktopExpenseModalChange }: Props) {
+  const { t } = useTranslation();
   const { setCurrency } = useCurrency();
 
   const [profile,         setProfile        ] = useState<OwnProfile | null>(null);
@@ -287,11 +295,12 @@ export default function Profile({ authEmail, authName, userId }: Props) {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarUrl,       setAvatarUrl      ] = useState<string | null>(null);
 
-  const [displayName,   setDisplayName  ] = useState('');
-  const [venmoHandle,   setVenmoHandle  ] = useState('');
-  const [cashappHandle, setCashappHandle] = useState('');
-  const [zelleHandle,   setZelleHandle  ] = useState('');
-  const [currency,      setCurrencyState] = useState<CurrencyCode>('USD');
+  const [displayName,    setDisplayName   ] = useState('');
+  const [venmoHandle,    setVenmoHandle   ] = useState('');
+  const [cashappHandle,  setCashappHandle ] = useState('');
+  const [zelleHandle,    setZelleHandle   ] = useState('');
+  const [currency,       setCurrencyState ] = useState<CurrencyCode>('USD');
+  const [defaultTaxRate, setDefaultTaxRate] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -307,18 +316,22 @@ export default function Profile({ authEmail, authName, userId }: Props) {
         setCashappHandle(p.cashappHandle ?? '');
         setZelleHandle(p.zelleHandle ?? '');
         setCurrencyState((p.defaultCurrency as CurrencyCode) ?? 'USD');
+        setDefaultTaxRate(p.defaultTaxRate > 0 ? String(p.defaultTaxRate) : '');
       }
       if (sRes.data) setStats(sRes.data);
     });
     return () => { cancelled = true; };
   }, []);
 
+  const taxRateNum = Math.max(0, Math.min(100, parseFloat(defaultTaxRate) || 0));
+
   const isDirty = profile != null && (
     displayName   !== (profile.fullName      ?? '')  ||
     venmoHandle   !== (profile.venmoHandle   ?? '')  ||
     cashappHandle !== (profile.cashappHandle ?? '')  ||
     zelleHandle   !== (profile.zelleHandle   ?? '')  ||
-    currency      !== (profile.defaultCurrency as CurrencyCode ?? 'USD')
+    currency      !== (profile.defaultCurrency as CurrencyCode ?? 'USD') ||
+    taxRateNum    !== (profile.defaultTaxRate ?? 0)
   );
 
   async function handleAvatarUpload(file: File) {
@@ -351,9 +364,14 @@ export default function Profile({ authEmail, authName, userId }: Props) {
       cashappHandle:   cleanCashApp || null,
       zelleHandle:     cleanZelle   || null,
       defaultCurrency: currency,
+      defaultTaxRate:  taxRateNum,
     });
     setSaving(false);
     if (error) { setSaveError(error); return; }
+    // Sync default tax rate to localStorage so ExpenseForm sees it immediately
+    if (userId) {
+      try { localStorage.setItem(`bsp_tax_${userId}`, String(taxRateNum)); } catch (_) {}
+    }
     setProfile(prev => prev ? {
       ...prev,
       fullName: displayName.trim() || null,
@@ -361,6 +379,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
       cashappHandle: cleanCashApp || null,
       zelleHandle: cleanZelle || null,
       defaultCurrency: currency,
+      defaultTaxRate: taxRateNum,
     } : prev);
     setVenmoHandle(cleanVenmo);
     setCashappHandle(cleanCashApp);
@@ -380,7 +399,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
     setCheckoutError(null);
     const { data: url, error } = await createCheckoutSession(priceId);
     setCheckoutLoading(null);
-    if (error || !url) { setCheckoutError(error ?? 'Could not start checkout'); return; }
+    if (error || !url) { setCheckoutError(error ?? t('profile.checkoutError')); return; }
     window.location.href = url;
   }
 
@@ -406,7 +425,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
             {saving  ? <Loader2 size={14} className="animate-spin" />
              : saved ? <Check   size={14} />
              :         <Save    size={14} />}
-            {saved ? 'Saved!' : 'Save changes'}
+            {saved ? t('common.success') : t('profile.saveChanges')}
           </button>
         </div>
       )}
@@ -440,13 +459,13 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                 <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FloatingInput
                     id="displayName"
-                    label="Display name"
+                    label={t('profile.displayName')}
                     value={displayName}
                     onChange={setDisplayName}
                   />
                   <FloatingInput
                     id="email"
-                    label="Email"
+                    label={t('profile.email')}
                     value={authEmail ?? ''}
                     readOnly
                   />
@@ -459,21 +478,88 @@ export default function Profile({ authEmail, authName, userId }: Props) {
 
               {/* Preferences */}
               <Section
-                title="Preferences"
+                title={t('profile.preferences')}
                 icon={<Globe size={15} className="text-violet-500" />}
               >
-                <div className="space-y-1.5">
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Default currency</p>
-                  <CurrencyCombobox value={currency} onChange={setCurrencyState} />
-                  <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed pt-1">
-                    Synced on sign-in. Changeable any time in the header.
-                  </p>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">{t('profile.defaultCurrency')}</p>
+                    <CurrencyCombobox value={currency} onChange={setCurrencyState} />
+                    <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed pt-1">
+                      {t('profile.currencyDesc')}
+                    </p>
+                  </div>
+
+                  {/* ── Global Sales Tax Rate ── */}
+                  <div className="pt-1 border-t border-gray-100 dark:border-slate-800 space-y-1.5">
+                    <div className="flex items-center gap-1.5 pt-3">
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{t('profile.globalTaxRate')}</p>
+                      <div className="relative group/taxinfo">
+                        <Info size={12} className="text-gray-300 dark:text-slate-600 cursor-default" />
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2 rounded-lg text-[11px] leading-relaxed bg-gray-800 dark:bg-slate-700 text-white opacity-0 group-hover/taxinfo:opacity-100 transition-opacity z-50 shadow-lg">
+                          {t('profile.taxRateTooltip')}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      'relative flex items-center rounded-xl border transition-colors',
+                      'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700',
+                      'hover:border-violet-400 dark:hover:border-violet-500',
+                      'focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-1 focus-within:ring-violet-300/40',
+                    )}>
+                      <input
+                        type="number"
+                        name="default-tax-rate"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={defaultTaxRate}
+                        onChange={e => setDefaultTaxRate(e.target.value)}
+                        placeholder="0"
+                        className="flex-1 bg-transparent outline-none text-sm px-3 py-2.5 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                      />
+                      <span className="pr-3 text-sm font-medium text-gray-400 dark:text-slate-500 select-none shrink-0">%</span>
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed">
+                      {t('profile.taxRateDesc')}
+                    </p>
+                  </div>
+
+                  <div className="pt-1 border-t border-gray-100 dark:border-slate-800">
+                    <div className="flex items-start justify-between gap-3 pt-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                          {t('profile.desktopModalLabel')}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed mt-0.5">
+                          {t('profile.desktopModalDesc')}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={desktopExpenseModal}
+                        onClick={() => onDesktopExpenseModalChange(!desktopExpenseModal)}
+                        className={cn(
+                          'relative shrink-0 inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
+                          desktopExpenseModal ? 'bg-violet-600' : 'bg-gray-200 dark:bg-slate-700',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
+                            desktopExpenseModal ? 'translate-x-[18px]' : 'translate-x-[3px]',
+                          )}
+                        />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </Section>
 
               {/* Payment handles */}
               <Section
-                title="Payment handles"
+                title={t('profile.paymentHandles')}
                 icon={
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-500">
                     <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
@@ -482,11 +568,11 @@ export default function Profile({ authEmail, authName, userId }: Props) {
               >
                 <div className="space-y-3">
                   <p className="text-xs text-gray-400 dark:text-slate-500 -mt-1">
-                    Members can tap these to pay you directly. No @ or $.
+                    {t('profile.paymentHandlesDesc')}
                   </p>
                   <FloatingInput
                     id="venmo"
-                    label="Venmo username"
+                    label={t('profile.venmoLabel')}
                     value={venmoHandle}
                     onChange={v => setVenmoHandle(v.replace(/^@+/, ''))}
                     icon={<VenmoIcon />}
@@ -495,7 +581,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                   />
                   <FloatingInput
                     id="cashapp"
-                    label="Cash App $cashtag"
+                    label={t('profile.cashappLabel')}
                     value={cashappHandle}
                     onChange={v => setCashappHandle(v.replace(/^\$+/, ''))}
                     icon={<CashAppIcon />}
@@ -504,7 +590,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                   />
                   <FloatingInput
                     id="zelle"
-                    label="Zelle (email or phone)"
+                    label={t('profile.zelleLabel')}
                     value={zelleHandle}
                     onChange={setZelleHandle}
                     icon={<ZelleIcon />}
@@ -516,7 +602,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
 
             {/* ── Subscription (full width) ── */}
             <Section
-              title="Subscription"
+              title={t('profile.subscription')}
               icon={<Sparkles size={15} className="text-violet-500" />}
             >
               {subscription.loading ? (
@@ -539,7 +625,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                             : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200',
                         )}
                       >
-                        Monthly
+                        {t('profile.monthly')}
                       </button>
                       <button
                         type="button"
@@ -551,9 +637,9 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                             : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200',
                         )}
                       >
-                        Yearly
+                        {t('profile.yearly')}
                         <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold leading-none">
-                          Save 20%
+                          {t('profile.save20')}
                         </span>
                       </button>
                     </div>
@@ -574,7 +660,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                     const premierPrice = billingCycle === 'yearly' ? STRIPE_PRICES.PREMIER_YEARLY : STRIPE_PRICES.PREMIER_MONTHLY;
 
                     // ── Reusable feature row ──────────────────────────────────
-                    function FeatureItem({ text, available = true, dark = false }: { text: string; available?: boolean; dark?: boolean }) {
+                    function FeatureItem({ text, available = true, dark = false, bold = false }: { text: string; available?: boolean; dark?: boolean; bold?: boolean }) {
                       return (
                         <li className="flex items-start gap-2">
                           {available ? (
@@ -588,7 +674,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                               ? available ? 'text-slate-200' : 'text-slate-500'
                               : available ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 dark:text-slate-600',
                           )}>
-                            {text.startsWith('Unlimited') ? <strong className="font-bold">{text}</strong> : text}
+                            {bold ? <strong className="font-bold">{text}</strong> : text}
                           </span>
                         </li>
                       );
@@ -601,7 +687,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                       monthlyPrice: string;
                       yearlyMonthly: string;
                       yearlyTotal:  string;
-                      features:     { text: string; available?: boolean }[];
+                      features:     { text: string; available?: boolean; bold?: boolean }[];
                       priceId:      string | null;
                       popular?:     boolean;
                       dark?:        boolean;
@@ -630,7 +716,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                           {isCurrent && (
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shadow-md">
-                                Current plan
+                                {t('profile.currentPlan')}
                               </span>
                             </div>
                           )}
@@ -650,7 +736,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                             )}
                             {popular && (
                               <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
-                                Most popular
+                                {t('profile.mostPopular')}
                               </span>
                             )}
                           </div>
@@ -659,17 +745,17 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                           <div className="mb-1">
                             {isFree ? (
                               <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
-                                Free
+                                {t('profile.free')}
                               </p>
                             ) : (
                               <>
                                 <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
                                   {displayPrice}
-                                  <span className="text-sm font-normal text-gray-400 dark:text-slate-500">/mo</span>
+                                  <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
                                 </p>
                                 {billingCycle === 'yearly' && (
                                   <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                                    Billed as {yearlyTotal}/year
+                                    {t('profile.billedYearly', { total: yearlyTotal })}
                                   </p>
                                 )}
                               </>
@@ -679,7 +765,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                           {/* Features */}
                           <ul className="mt-4 mb-5 space-y-2 flex-1">
                             {features.map((f, i) => (
-                              <FeatureItem key={i} text={f.text} available={f.available ?? true} dark={dark} />
+                              <FeatureItem key={i} text={f.text} available={f.available ?? true} dark={dark} bold={f.bold} />
                             ))}
                           </ul>
 
@@ -689,21 +775,21 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                               disabled
                               className="w-full py-2 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 cursor-not-allowed"
                             >
-                              Current plan
+                              {t('profile.currentPlan')}
                             </button>
                           ) : isFree ? (
                             <button
                               disabled
                               className="w-full py-2 rounded-xl text-sm font-semibold bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700 cursor-not-allowed"
                             >
-                              Free forever
+                              {t('profile.freeForever')}
                             </button>
                           ) : isComingSoon ? (
                             <button
                               disabled
                               className="w-full py-2 rounded-xl text-sm font-semibold bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-dashed border-gray-300 dark:border-slate-600 cursor-not-allowed"
                             >
-                              Coming soon
+                              {t('profile.comingSoon')}
                             </button>
                           ) : popular ? (
                             <button
@@ -718,8 +804,8 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                               )}
                             >
                               {isLoading
-                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Opening…</span>
-                                : currentTier === 'free' ? 'Upgrade' : 'Switch plan'}
+                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
+                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           ) : (
                             <button
@@ -734,8 +820,8 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                               )}
                             >
                               {isLoading
-                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Opening…</span>
-                                : currentTier === 'free' ? 'Upgrade' : 'Switch plan'}
+                                ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
+                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           )}
                         </div>
@@ -751,48 +837,48 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
                         <TierCard
                           tier="free"
-                          name="Free"
+                          name={t('profile.tier.free')}
                           monthlyPrice="$0"
                           yearlyMonthly="$0"
                           yearlyTotal="$0"
                           priceId={null}
                           features={[
-                            { text: '3 groups' },
-                            { text: 'Limit of 4 members per group' },
-                            { text: '90 expenses / month' },
-                            { text: 'Smart Settle' },
-                            { text: 'Priority support', available: false },
+                            { text: t('profile.tier.freeGroups') },
+                            { text: t('profile.tier.freeMembers') },
+                            { text: t('profile.tier.freeExpenses') },
+                            { text: t('profile.tier.smartSettle') },
+                            { text: t('profile.tier.prioritySupport'), available: false },
                           ]}
                         />
                         <TierCard
                           tier="pro"
-                          name="Pro"
+                          name={t('profile.tier.pro')}
                           monthlyPrice="$4.99"
                           yearlyMonthly="$3.99"
                           yearlyTotal="$47.88"
                           priceId={proPrice}
                           popular
                           features={[
-                            { text: '8 groups' },
-                            { text: 'Limit of 12 members per group' },
-                            { text: 'Unlimited expenses' },
-                            { text: 'Smart Settle enabled' },
-                            { text: 'Priority support', available: false },
+                            { text: t('profile.tier.proGroups') },
+                            { text: t('profile.tier.proMembers') },
+                            { text: t('profile.tier.unlimitedExpenses'), bold: true },
+                            { text: t('profile.tier.smartSettleEnabled') },
+                            { text: t('profile.tier.prioritySupport'), available: false },
                           ]}
                         />
                         <TierCard
                           tier="premier"
-                          name="Premier"
+                          name={t('profile.tier.premier')}
                           monthlyPrice="$9.99"
                           yearlyMonthly="$7.99"
                           yearlyTotal="$95.88"
                           priceId={premierPrice}
                           features={[
-                            { text: 'Unlimited groups' },
-                            { text: 'Unlimited group members' },
-                            { text: 'Unlimited expenses' },
-                            { text: 'Smart Settle enabled' },
-                            { text: 'Priority support' },
+                            { text: t('profile.tier.unlimitedGroups'), bold: true },
+                            { text: t('profile.tier.unlimitedMembers'), bold: true },
+                            { text: t('profile.tier.unlimitedExpenses'), bold: true },
+                            { text: t('profile.tier.smartSettleEnabled') },
+                            { text: t('profile.tier.prioritySupport') },
                           ]}
                         />
                       </div>
@@ -810,7 +896,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                   <span className="font-semibold text-gray-700 dark:text-slate-300">
                     {stats?.groupCount ?? '—'}
                   </span>{' '}
-                  {stats?.groupCount === 1 ? 'group' : 'groups'}
+                  {t('profile.stat.group', { count: stats?.groupCount ?? 0 })}
                 </span>
               </div>
               <div className="w-px h-4 bg-gray-200 dark:bg-slate-700 shrink-0" />
@@ -819,7 +905,7 @@ export default function Profile({ authEmail, authName, userId }: Props) {
                   <span className="font-semibold text-gray-700 dark:text-slate-300">
                     {stats?.expenseCount ?? '—'}
                   </span>{' '}
-                  {stats?.expenseCount === 1 ? 'expense' : 'expenses'} added
+                  {t('profile.stat.expense', { count: stats?.expenseCount ?? 0 })} {t('profile.stat.added')}
                 </span>
               </div>
             </div>

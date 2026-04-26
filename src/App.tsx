@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './components/LanguageSwitcher';
+import { applyLangToDOM, LANG_STORAGE_KEY } from './lib/i18n';
 import { supabase } from './lib/supabase';
 import type { Expense, Participant } from './types';
 import {
@@ -24,7 +27,12 @@ import SignInModal from './components/SignInModal';
 import GroupSidebar from './components/GroupSidebar';
 import GroupActions from './components/GroupActions';
 import ActivityLog from './components/ActivityLog';
+import ExpenseModal from './components/ExpenseModal';
+import FeedbackButton from './components/FeedbackButton';
+import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour';
 import Profile from './pages/Profile';
+import Analytics from './pages/Analytics';
+import Landing from './pages/Landing';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
@@ -67,24 +75,20 @@ function loadActiveGroup(): string | null {
 // ─── Theme hook ───────────────────────────────────────────────────────────────
 
 function useTheme() {
-  const [mounted, setMounted] = useState(false);
-  const [dark,    setDark   ] = useState(false);
-
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
-    setMounted(true);
-  }, []);
+  // Read directly from the DOM so the initial value is always correct — no
+  // useEffect delay, no stale-closure risk, no SSR concern (this is a pure SPA).
+  const [dark, setDark] = useState<boolean>(() =>
+    document.documentElement.classList.contains('dark'),
+  );
 
   function toggle() {
-    setDark(prev => {
-      const next = !prev;
-      document.documentElement.classList.toggle('dark', next);
-      try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch (_) {}
-      return next;
-    });
+    const next = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', next);
+    try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch (_) {}
+    setDark(next);
   }
 
-  return { dark, mounted, toggle };
+  return { dark, toggle };
 }
 
 // ─── UserAvatar ───────────────────────────────────────────────────────────────
@@ -155,16 +159,27 @@ function GroupRouteSync({ groups, activeGroupId, groupsLoading, onSync }: GroupR
 
 function AppInner() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { dark, mounted, toggle } = useTheme();
+  const { dark, toggle } = useTheme();
   const { setCurrency } = useCurrency();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const [showSignIn,        setShowSignIn       ] = useState(false);
-  const [sidebarOpen,       setSidebarOpen      ] = useState(false);
-  const [profileAvatar,     setProfileAvatar    ] = useState<string | null>(null);
-  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  const [showSignIn,           setShowSignIn          ] = useState(false);
+  const [sidebarOpen,          setSidebarOpen         ] = useState(false);
+  const [showExpenseModal,     setShowExpenseModal    ] = useState(false);
+  const [desktopExpenseModal,  setDesktopExpenseModal ] = useState(() =>
+    loadJson<boolean>('billsplitter_desktop_modal', false)
+  );
+  const [profileAvatar,        setProfileAvatar       ] = useState<string | null>(null);
+  const [profileDisplayName,   setProfileDisplayName  ] = useState<string | null>(null);
 
-  const isProfilePage = location.pathname === '/profile';
+  function handleDesktopModalChange(val: boolean) {
+    setDesktopExpenseModal(val);
+    try { localStorage.setItem('billsplitter_desktop_modal', JSON.stringify(val)); } catch (_) {}
+  }
+
+  const isProfilePage   = location.pathname === '/profile';
+  const isAnalyticsPage = location.pathname.startsWith('/analytics');
 
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
@@ -202,7 +217,7 @@ function AppInner() {
     setDbExpenses,
   );
 
-  // Sync profile data (currency, avatar, display name) on sign-in; clear on sign-out
+  // Sync profile data (currency, avatar, display name, language) on sign-in; clear on sign-out
   useEffect(() => {
     if (!user) {
       setProfileAvatar(null);
@@ -213,6 +228,14 @@ function AppInner() {
       if (!data) return;
       if (data.defaultCurrency in CURRENCIES) {
         setCurrency(data.defaultCurrency as CurrencyCode);
+      }
+      // Seed default tax rate into localStorage so ExpenseForm can read it instantly
+      try { localStorage.setItem(`bsp_tax_${user.id}`, String(data.defaultTaxRate ?? 0)); } catch (_) {}
+      // Sync language preference from profile (overrides browser-detected lang)
+      if (data.languagePreference && data.languagePreference !== i18n.language) {
+        void i18n.changeLanguage(data.languagePreference);
+        try { localStorage.setItem(LANG_STORAGE_KEY, data.languagePreference); } catch (_) {}
+        applyLangToDOM(data.languagePreference);
       }
       // Profile table avatar takes priority; fall back to OAuth metadata avatar
       setProfileAvatar(data.avatarUrl ?? user.user_metadata?.avatar_url ?? null);
@@ -397,6 +420,37 @@ function AppInner() {
   const activeGroupRole = groups.find(g => g.id === activeGroupId)?.role ?? null;
   const isViewer        = activeGroupRole === 'viewer';
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Never fire while the user is typing in a form field
+      const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
+      const isEditing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+        || (document.activeElement as HTMLElement | null)?.isContentEditable;
+      if (isEditing) return;
+
+      if (e.key === 'n' || e.key === 'N') {
+        // Only open when a group (or guest mode) is active and user can add expenses
+        const hasNoGroups = isSignedIn && !groupsLoading && groups.length === 0;
+        if (!isProfilePage && !(isSignedIn && isViewer) && !hasNoGroups) {
+          e.preventDefault();
+          setShowExpenseModal(true);
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (showExpenseModal) { setShowExpenseModal(false); return; }
+        if (showSignIn)       { setShowSignIn(false);       return; }
+        // Clear any highlighted/selected expenses
+        setExpenses(prev => prev.map(ex => ({ ...ex, isHighlighted: false })));
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isProfilePage, isSignedIn, isViewer, groupsLoading, groups, showExpenseModal, showSignIn, setExpenses]);
+
   // ── Group management ───────────────────────────────────────────────────────
 
   const handleGroupSyncRef = useRef<(id: string) => void>(() => {});
@@ -406,6 +460,10 @@ function AppInner() {
     saveActiveGroup(id);
     setSidebarOpen(false);
     navigate(`/group/${id}`);
+  }
+
+  function handleOpenAnalytics() {
+    navigate('/analytics');
   }
 
   function handleGroupAdded(group: GroupInfo) {
@@ -439,6 +497,10 @@ function AppInner() {
 
   function handleGroupDeleted(groupId: string) {
     handleGroupLeft(groupId);
+  }
+
+  function handleGroupTaxRateChanged(groupId: string, rate: number | null) {
+    setGroups(prev => prev.map(g => g.id === groupId ? { ...g, defaultTaxRate: rate } : g));
   }
 
   // Keep a stable ref so GroupRouteSync can call it without re-subscribing
@@ -638,6 +700,12 @@ function AppInner() {
   const highlighted   = expenses.filter(e => e.isHighlighted);
   const selectedDebts = computeSelectedDebts(highlighted);
 
+  const noGroups = isSignedIn && !groupsLoading && groups.length === 0;
+
+  // ── Onboarding tour — must be called before any early return (Rules of Hooks)
+  const tourReady = !authLoading && !isProfilePage && !noGroups && (!isSignedIn || (!!activeGroupId && !dbLoading));
+  const { show: showTour, dismiss: dismissTour } = useOnboardingTour(tourReady);
+
   // ── Auth-loading spinner ───────────────────────────────────────────────────
   if (authLoading) {
     return (
@@ -646,8 +714,6 @@ function AppInner() {
       </div>
     );
   }
-
-  const noGroups = isSignedIn && !groupsLoading && groups.length === 0;
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
@@ -667,6 +733,8 @@ function AppInner() {
           onGroupLeft={handleGroupLeft}
           onGroupDeleted={handleGroupDeleted}
           onOpenProfile={() => navigate('/profile')}
+          onOpenAnalytics={handleOpenAnalytics}
+          onGroupTaxRateChanged={handleGroupTaxRateChanged}
         />
       )}
 
@@ -685,7 +753,7 @@ function AppInner() {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-                aria-label="Open groups"
+                aria-label={t('nav.openGroups')}
               >
                 <Menu size={20} />
               </button>
@@ -715,27 +783,27 @@ function AppInner() {
                   BillSplitter
                 </h1>
                 {isProfilePage && isSignedIn ? (
-                  <p className="text-xs text-gray-400 dark:text-slate-500">Profile</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500">{t('nav.profile')}</p>
                 ) : isSignedIn && activeGroupId ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500 truncate">
                     {groups.find(g => g.id === activeGroupId)?.name ?? ''}
                   </p>
                 ) : !isSignedIn ? (
-                  <p className="text-xs text-gray-400 dark:text-slate-500">Split expenses fairly</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500">{t('nav.tagline')}</p>
                 ) : null}
               </div>
             </div>
 
             <CurrencyDropdown />
 
+            <LanguageSwitcher variant="dark" />
+
             <button
               onClick={toggle}
-              aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={dark ? t('nav.lightMode') : t('nav.darkMode')}
               className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all duration-200 ease-in-out hover:scale-105 active:scale-95"
             >
-              {mounted
-                ? dark ? <Sun size={18} /> : <Moon size={18} />
-                : <span className="w-[18px] h-[18px] block" />}
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
             {isSignedIn ? (
@@ -758,7 +826,7 @@ function AppInner() {
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <LogOut size={15} />
-                  <span className="hidden sm:inline">Sign out</span>
+                  <span className="hidden sm:inline">{t('nav.signOut')}</span>
                 </button>
               </div>
             ) : (
@@ -766,7 +834,7 @@ function AppInner() {
                 onClick={() => setShowSignIn(true)}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors"
               >
-                Sign in
+                {t('nav.signIn')}
               </button>
             )}
           </div>
@@ -774,8 +842,6 @@ function AppInner() {
 
         {/* ── Routes — handles redirects, group-param sync, and profile page ── */}
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
           {/* Sync /group/:groupId URL param → activeGroupId state */}
           <Route path="/group/:groupId" element={
             <GroupRouteSync
@@ -793,13 +859,22 @@ function AppInner() {
                 authEmail={user?.email ?? null}
                 authName={user?.user_metadata?.full_name ?? null}
                 userId={user?.id ?? null}
+                desktopExpenseModal={desktopExpenseModal}
+                onDesktopExpenseModalChange={handleDesktopModalChange}
               />
+            </ProtectedRoute>
+          } />
+
+          {/* Analytics page */}
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <Analytics groups={groups} currentUserId={user?.id ?? null} />
             </ProtectedRoute>
           } />
         </Routes>
 
-        {/* ── Dashboard content — visible for all non-profile routes ── */}
-        {!isProfilePage && (<>
+        {/* ── Dashboard content — visible for all non-profile/non-analytics routes ── */}
+        {!isProfilePage && !isAnalyticsPage && (<>
 
           <OfflineBanner />
 
@@ -866,21 +941,42 @@ function AppInner() {
             </div>
           )}
 
-          {/* ── No-groups prompt ── */}
+          {/* ── No-groups welcome state ── */}
           {noGroups && (
-            <div className="flex items-center justify-center min-h-[calc(100vh-73px)] px-4">
-              <div className="w-full max-w-sm">
-                <div className="text-center mb-6">
-                  <div className="inline-flex p-4 rounded-2xl bg-violet-50 dark:bg-violet-900/20 mb-4">
-                    <Users size={32} className="text-violet-500" />
+            <div className="flex items-center justify-center min-h-[calc(100vh-73px)] px-4 py-12">
+              <div className="w-full max-w-md">
+
+                {/* Hero icon + headline */}
+                <div className="text-center mb-8">
+                  <div className="relative inline-flex mb-5">
+                    <div className="absolute inset-0 rounded-3xl bg-violet-500/20 blur-xl" />
+                    <div className="relative inline-flex p-5 rounded-3xl bg-violet-50 dark:bg-violet-900/30 border border-violet-100 dark:border-violet-800/50">
+                      <Users size={36} className="text-violet-500 dark:text-violet-400" />
+                    </div>
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2">
                     Welcome to BillSplitter
                   </h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-400">
-                    Create a group to get started, or join one with a code.
+                  <p className="text-sm text-gray-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                    Create a group for your trip, household, or any shared expense — or join one with an invite code.
                   </p>
                 </div>
+
+                {/* Feature hints */}
+                <div className="grid grid-cols-3 gap-3 mb-8">
+                  {[
+                    { icon: '💱', label: '30+ currencies' },
+                    { icon: '⚡', label: 'Smart Settle' },
+                    { icon: '🔄', label: 'Real-time sync' },
+                  ].map(f => (
+                    <div key={f.label} className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/50">
+                      <span className="text-xl">{f.icon}</span>
+                      <span className="text-[11px] font-medium text-gray-500 dark:text-slate-400 text-center leading-tight">{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Group actions */}
                 <GroupActions
                   onCreated={handleGroupAdded}
                   onJoined={handleGroupAdded}
@@ -904,7 +1000,7 @@ function AppInner() {
 
                 {/* ── Left column ── */}
                 <div className="space-y-5 lg:col-start-1">
-                  <div className="order-1">
+                  <div className="order-1" data-tour="members">
                     <ParticipantInput
                       participants={participants}
                       balances={balances}
@@ -928,11 +1024,34 @@ function AppInner() {
                           </p>
                         </div>
                       </div>
+                    ) : desktopExpenseModal ? (
+                      /* Modal mode (or mobile): show the dashed button */
+                      <button
+                        data-tour="add-expense"
+                        onClick={() => setShowExpenseModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-800/60 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:border-violet-400 dark:hover:border-violet-600 transition-all group"
+                      >
+                        <Receipt size={16} className="group-hover:scale-110 transition-transform" />
+                        <span className="text-sm font-medium">Add Expense</span>
+                        <kbd className="ml-1 hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-violet-200 dark:border-violet-800 text-[10px] font-mono text-violet-400 dark:text-violet-500">N</kbd>
+                      </button>
                     ) : (
-                      <ExpenseForm
-                        participants={participants}
-                        onAdd={addExpense}
-                      />
+                      /* Inline mode (default on desktop) */
+                      <>
+                        {/* Desktop: inline form */}
+                        <div className="hidden lg:block" data-tour="add-expense">
+                          <ExpenseForm participants={participants} onAdd={addExpense} groupId={activeGroupId ?? undefined} groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate} />
+                        </div>
+                        {/* Mobile: dashed button → modal */}
+                        <button
+                          data-tour="add-expense"
+                          onClick={() => setShowExpenseModal(true)}
+                          className="lg:hidden w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-800/60 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:border-violet-400 dark:hover:border-violet-600 transition-all group"
+                        >
+                          <Receipt size={16} className="group-hover:scale-110 transition-transform" />
+                          <span className="text-sm font-medium">Add Expense</span>
+                        </button>
+                      </>
                     )}
                   </div>
                   <div className="order-5">
@@ -958,7 +1077,7 @@ function AppInner() {
                       expenses={expenses}
                     />
                   </div>
-                  <div className="order-4">
+                  <div className="order-4" data-tour="settlement">
                     <SettlementAdvice
                       settlements={settlements}
                       participants={participants}
@@ -991,7 +1110,26 @@ function AppInner() {
         </>)}
       </div>
 
+      {showTour && (
+        <OnboardingTour
+          onDone={dismissTour}
+          showSignupStep={!isSignedIn}
+          onSignUp={() => setShowSignIn(true)}
+        />
+      )}
+
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
+
+      <ExpenseModal
+        isOpen={showExpenseModal}
+        onClose={() => setShowExpenseModal(false)}
+        participants={participants}
+        onAdd={addExpense}
+        groupId={activeGroupId ?? undefined}
+        groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate}
+      />
+
+      {!isProfilePage && <FeedbackButton />}
     </div>
   );
 }
@@ -1001,9 +1139,14 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <CurrencyProvider>
-        <AppInner />
-      </CurrencyProvider>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/*" element={
+          <CurrencyProvider>
+            <AppInner />
+          </CurrencyProvider>
+        } />
+      </Routes>
     </AuthProvider>
   );
 }

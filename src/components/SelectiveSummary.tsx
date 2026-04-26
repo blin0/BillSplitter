@@ -3,6 +3,7 @@ import { ArrowRight, CheckCircle2, CreditCard, Highlighter } from 'lucide-react'
 import type { Participant, Settlement } from '../types';
 import { useCurrency } from '../context/CurrencyContext';
 import SettleModal from './SettleModal';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   selectedDebts:    Settlement[];
@@ -24,6 +25,7 @@ export default function SelectiveSummary({
   groupName,
 }: Props) {
   const { formatPrice } = useCurrency();
+  const { t } = useTranslation();
 
   type SettlingState = { from: string; to: string; amount: number };
   const [settling, setSettling] = useState<SettlingState | null>(null);
@@ -42,23 +44,23 @@ export default function SelectiveSummary({
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
         <div className="flex items-center gap-2 mb-1">
           <Highlighter size={16} className="text-violet-500 dark:text-violet-400 shrink-0" />
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Selected Settlement</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">{t('settlement.selectedTitle')}</h2>
         </div>
         <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">
           {highlightedCount === 0
-            ? 'Click expenses to select them for settlement.'
-            : `Based on ${highlightedCount} selected expense${highlightedCount !== 1 ? 's' : ''}.`}
+            ? t('settlement.clickToSelectExpenses')
+            : t('settlement.basedOnExpenses', { count: highlightedCount })}
         </p>
 
         {highlightedCount === 0 ? (
           <div className="flex flex-col items-center gap-2 py-6 text-gray-300 dark:text-slate-600">
             <Highlighter size={28} />
-            <p className="text-sm text-gray-400 dark:text-slate-500">No expenses selected</p>
+            <p className="text-sm text-gray-400 dark:text-slate-500">{t('settlement.noSelected')}</p>
           </div>
         ) : selectedDebts.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-6">
             <CheckCircle2 size={28} className="text-green-400 dark:text-green-500" />
-            <p className="text-sm text-gray-400 dark:text-slate-500">All selected expenses are settled!</p>
+            <p className="text-sm text-gray-400 dark:text-slate-500">{t('settlement.allSelectedSettled')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -84,7 +86,7 @@ export default function SelectiveSummary({
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-600 text-white transition-all hover:brightness-110 hover:shadow-lg hover:shadow-violet-500/20 hover:scale-105 active:scale-95 shrink-0"
                       >
                         <CreditCard size={12} />
-                        Settle
+                        {t('settlement.settle')}
                       </button>
                     )}
                   </div>

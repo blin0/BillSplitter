@@ -4,10 +4,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Smooth scroll for the entire site */
+html {
+  scroll-behavior: smooth;
+}
+
+
 /* Prevent horizontal overflow globally */
 html, body {
   overflow-x: hidden;
   max-width: 100%;
+}
+
+/* ── Animated mesh gradient blobs ─────────────────────────────────────────── */
+
+@keyframes blob-drift-1 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  25%       { transform: translate(80px, -70px) scale(1.08); }
+  50%       { transform: translate(-50px, 60px) scale(0.96); }
+  75%       { transform: translate(60px, 30px) scale(1.04); }
+}
+
+@keyframes blob-drift-2 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  30%       { transform: translate(-90px, 50px) scale(1.12); }
+  60%       { transform: translate(70px, -40px) scale(0.92); }
+  80%       { transform: translate(-40px, -60px) scale(1.06); }
+}
+
+@keyframes blob-drift-3 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  40%       { transform: translate(60px, -80px) scale(1.1); }
+  70%       { transform: translate(-80px, 50px) scale(0.94); }
+}
+
+@keyframes blob-drift-4 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  30%       { transform: translate(50px, -60px) scale(1.09); }
+  55%       { transform: translate(-40px, 80px) scale(0.93); }
+  80%       { transform: translate(70px, 30px) scale(1.05); }
+}
+
+.blob-1 {
+  animation: blob-drift-1 20s ease-in-out infinite;
+  will-change: transform;
+}
+.blob-2 {
+  animation: blob-drift-2 25s ease-in-out infinite;
+  will-change: transform;
+}
+.blob-3 {
+  animation: blob-drift-3 18s ease-in-out infinite;
+  will-change: transform;
+}
+.blob-4 {
+  animation: blob-drift-4 28s ease-in-out infinite;
+  will-change: transform;
 }
 
 /* Ensure padding/border never add to element widths */
@@ -41,6 +93,13 @@ input[type='number'] {
   90%      { transform: translateX(2px); }
 }
 
+/* Tax field auto-populate highlight — brief lavender glow */
+@keyframes taxGlow {
+  0%   { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139,92,246,0.25), 0 0 12px rgba(139,92,246,0.15); background-color: rgba(139,92,246,0.06); }
+  60%  { border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); background-color: rgba(139,92,246,0.03); }
+  100% { border-color: inherit; box-shadow: none; background-color: transparent; }
+}
+
 @keyframes spin-gradient {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
@@ -72,7 +131,55 @@ input[type='number'] {
 @layer base {
   *, *::before, *::after {
     transition-property: color, background-color, border-color, fill, stroke;
-    transition-duration: 500ms;
+    transition-duration: 300ms;
     transition-timing-function: ease;
   }
+}
+
+/* ── Analytics Design Tokens ──────────────────────────────────────────────── */
+
+:root {
+  --analytics-card-bg:        rgb(255, 255, 255);
+  --analytics-card-border:    rgb(243, 244, 246);
+  --analytics-tooltip-bg:     rgb(255, 255, 255);
+  --analytics-tooltip-border: rgb(229, 231, 235);
+  --analytics-dropdown-bg:    rgb(255, 255, 255);
+  --analytics-dropdown-item:  rgba(0, 0, 0, 0.04);
+  --analytics-chart-grid:     rgba(0, 0, 0, 0.06);
+  --analytics-chart-tick:     #94a3b8;
+  --analytics-donut-hole:     rgb(249, 250, 251);
+  --analytics-sub-row:        rgb(249, 250, 251);
+  --analytics-divider:        rgb(243, 244, 246);
+  --analytics-toggle-bg:      rgb(243, 244, 246);
+  --analytics-toggle-border:  rgb(229, 231, 235);
+}
+
+.dark {
+  --analytics-card-bg:        rgb(15, 23, 42);
+  --analytics-card-border:    rgb(30, 41, 59);
+  --analytics-tooltip-bg:     rgb(15, 23, 42);
+  --analytics-tooltip-border: rgb(51, 65, 85);
+  --analytics-dropdown-bg:    rgb(15, 23, 42);
+  --analytics-dropdown-item:  rgba(255, 255, 255, 0.06);
+  --analytics-chart-grid:     rgba(255, 255, 255, 0.05);
+  --analytics-chart-tick:     #475569;
+  --analytics-donut-hole:     rgb(15, 23, 42);
+  --analytics-sub-row:        rgba(255, 255, 255, 0.04);
+  --analytics-divider:        rgb(30, 41, 59);
+  --analytics-toggle-bg:      rgb(30, 41, 59);
+  --analytics-toggle-border:  rgb(51, 65, 85);
+}
+
+/* ── Suppress Recharts focus rings ────────────────────────────────────────── */
+
+.recharts-sector:focus,
+.recharts-sector:focus-visible,
+.recharts-pie-sector:focus,
+.recharts-pie-sector:focus-visible {
+  outline: none !important;
+}
+
+.recharts-wrapper svg:focus,
+.recharts-wrapper svg *:focus {
+  outline: none !important;
 }

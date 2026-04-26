@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, Hash, Loader2, Users, Lock, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { createGroup, joinGroupByCode, fetchOwnGroupCount, type GroupInfo } from '../lib/db';
 import { useSubscription } from '../hooks/useSubscription';
 
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) {
+  const { t } = useTranslation();
   const subscription = useSubscription();
 
   // ── Create state ───────────────────────────────────────────────────────────
@@ -44,7 +46,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
     const { data, error } = await createGroup(name);
     setCreateLoading(false);
     if (error || !data) {
-      setCreateError(error ?? 'Something went wrong.');
+      setCreateError(error ?? t('common.error'));
     } else {
       setCreateName('');
       onCreated(data);
@@ -60,7 +62,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
     e.preventDefault();
     const code = joinCode.trim().toUpperCase();
     if (code.length !== 6) {
-      setJoinError('Code must be exactly 6 characters.');
+      setJoinError(t('sidebar.errorCodeLength'));
       return;
     }
     setJoinError(null);
@@ -68,7 +70,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
     const { data, error } = await joinGroupByCode(code);
     setJoinLoading(false);
     if (error || !data) {
-      setJoinError(error ?? 'Something went wrong.');
+      setJoinError(error ?? t('common.error'));
     } else {
       setJoinCode('');
       onJoined(data);
@@ -85,7 +87,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
             <Plus size={14} className="text-violet-600 dark:text-violet-400" />
           </div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-            Create a group
+            {t('groupActions.createTitle')}
           </h3>
         </div>
 
@@ -96,10 +98,10 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
               <Lock size={14} className="text-amber-500 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">
-                  Free plan limit reached
+                  {t('sidebar.freePlanLimit')}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  You've used all {FREE_TIER_GROUP_LIMIT} free groups. Upgrade to Pro for unlimited groups.
+                  {t('sidebar.freePlanDesc', { limit: FREE_TIER_GROUP_LIMIT })}
                 </p>
               </div>
             </div>
@@ -109,15 +111,16 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl py-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
             >
               <Sparkles size={13} />
-              Upgrade to Pro
+              {t('sidebar.upgradeProBtn')}
             </button>
           </div>
         ) : (
           <form onSubmit={handleCreate} className="space-y-2.5">
             <input
               type="text"
+              name="group-name"
               required
-              placeholder="e.g. Japan Trip 2025"
+              placeholder={t('sidebar.groupNamePlaceholder')}
               value={createName}
               onChange={e => setCreateName(e.target.value)}
               maxLength={60}
@@ -132,8 +135,8 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
               className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl py-2 transition-colors"
             >
               {createLoading
-                ? <><Loader2 size={14} className="animate-spin" /> Creating…</>
-                : 'Create group'}
+                ? <><Loader2 size={14} className="animate-spin" /> {t('sidebar.creating')}</>
+                : t('groups.createGroup')}
             </button>
           </form>
         )}
@@ -146,7 +149,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
             <Users size={14} className="text-emerald-600 dark:text-emerald-400" />
           </div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-            Join a group
+            {t('groupActions.joinTitle')}
           </h3>
         </div>
 
@@ -155,7 +158,8 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
             <Hash size={14} className="text-gray-400 dark:text-slate-500 shrink-0" />
             <input
               type="text"
-              placeholder="6-digit code"
+              name="invite-code"
+              placeholder={t('sidebar.codePlaceholder')}
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
               maxLength={6}
@@ -171,8 +175,8 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl py-2 transition-colors"
           >
             {joinLoading
-              ? <><Loader2 size={14} className="animate-spin" /> Joining…</>
-              : 'Join group'}
+              ? <><Loader2 size={14} className="animate-spin" /> {t('sidebar.joining')}</>
+              : t('groups.joinGroup')}
           </button>
         </form>
       </div>

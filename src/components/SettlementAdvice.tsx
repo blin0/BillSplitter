@@ -4,6 +4,7 @@ import type { Participant, Settlement } from '../types';
 import { useCurrency } from '../context/CurrencyContext';
 import { cn } from '../lib/cn';
 import SettleModal from './SettleModal';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   settlements:  Settlement[];
@@ -23,6 +24,7 @@ export default function SettlementAdvice({
   groupName,
 }: Props) {
   const { formatPrice } = useCurrency();
+  const { t } = useTranslation();
 
   type SettlingState = { from: string; to: string; amount: number };
   const [settling, setSettling] = useState<SettlingState | null>(null);
@@ -43,12 +45,12 @@ export default function SettlementAdvice({
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">Settlement Advice</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">{t('settlement.adviceTitle')}</h2>
 
         {settlements.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-6 text-gray-400 dark:text-slate-500">
             <CheckCircle2 size={32} className="text-green-400 dark:text-green-500" />
-            <p className="text-sm">Everyone is settled up!</p>
+            <p className="text-sm">{t('settlement.allSettledUp')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -89,7 +91,7 @@ export default function SettlementAdvice({
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-all hover:brightness-110 hover:shadow-lg hover:shadow-amber-500/20 hover:scale-105 active:scale-95 shrink-0"
                       >
                         <CreditCard size={12} />
-                        Settle
+                        {t('settlement.settle')}
                       </button>
                     )}
 

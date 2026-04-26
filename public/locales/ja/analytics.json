@@ -1,0 +1,70 @@
+{
+  "title": "アナリティクス",
+  "summary": "サマリー",
+  "group": "グループ",
+  "selectGroup": "グループを選択",
+  "noGroups": "アナリティクスを表示するにはグループに参加または作成してください。",
+  "cat": {
+    "Dining": "外食",
+    "Coffee": "カフェ",
+    "Groceries": "食料品",
+    "Travel": "交通",
+    "Bills": "公共料金",
+    "Misc": "その他",
+    "Tax": "税",
+    "Tip": "チップ"
+  },
+  "donut": {
+    "title": "カテゴリ",
+    "total": "合計",
+    "noExpenses": "支出なし",
+    "insightTop": "最大カテゴリは{{cat}}で、総支出の{{pct}}%を占めています。",
+    "insightNone": "支出を追加してカテゴリの内訳を確認しましょう。"
+  },
+  "savings": {
+    "title": "精密合計",
+    "tracked": "追跡済み",
+    "tax": "税",
+    "tips": "チップ",
+    "insight": "税とチップで{{amount}}を精密追跡 — 総支出の{{pct}}%。",
+    "acrossExpenses_one": "税またはチップがある{{count}}件の支出で",
+    "acrossExpenses_other": "税またはチップがある{{count}}件の支出で"
+  },
+  "peer": {
+    "title": "ピアダイナミクス",
+    "debtFlow": "債務フロー",
+    "totalSpent": "総支出",
+    "noParticipants": "参加者なし",
+    "whoPaysWho": "誰が誰に払うか",
+    "morePayments_one": "さらに{{count}}件の支払い",
+    "morePayments_other": "さらに{{count}}件の支払い",
+    "noSpending": "支出なし",
+    "isOwed": "受け取り予定",
+    "owes": "支払い予定",
+    "fullySettled": "✓ 完済",
+    "pctSettled": "{{pct}}% 精算済み",
+    "splits_one": "{{count}}件の分割",
+    "splits_other": "{{count}}件の分割",
+    "totalSpentLabel": "総支出：",
+    "pctOfTotal": "% (合計に対する割合)",
+    "insight": "このビューのすべての分割の{{pct}}%が完全に精算されています。",
+    "insightNone": "参加者を追加してピアダイナミクスを確認しましょう。"
+  },
+  "velocity": {
+    "title": "支出速度",
+    "thirtyDay": "30日間",
+    "total": "合計",
+    "largeExpenses": "大きな支出",
+    "fxTitle": "為替レートの変動",
+    "fxDesc_one": "{{count}}件の支出が当日のレートで外国通貨で記録されました。",
+    "fxDesc_other": "{{count}}件の支出が当日のレートで外国通貨で記録されました。",
+    "fxSuffix": "本日のレートで換算した場合、合計は",
+    "fxMore": "ロック時より{{amount}}多くなります。",
+    "fxLess": "ロック時より{{amount}}少なくなります。",
+    "insight": "支出は前の30日間と比べて{{dir}} {{pct}}%です。",
+    "up": "増加",
+    "down": "減少",
+    "insightNone": "トレンドを計算するには十分な履歴がありません。"
+  },
+  "insightLabel": "スマートインサイト"
+}

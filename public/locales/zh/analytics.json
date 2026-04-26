@@ -1,0 +1,70 @@
+{
+  "title": "分析",
+  "summary": "总览",
+  "group": "群组",
+  "selectGroup": "选择群组",
+  "noGroups": "加入或创建群组以查看分析。",
+  "cat": {
+    "Dining": "餐饮",
+    "Coffee": "咖啡",
+    "Groceries": "杂货",
+    "Travel": "出行",
+    "Bills": "账单",
+    "Misc": "其他",
+    "Tax": "税费",
+    "Tip": "小费"
+  },
+  "donut": {
+    "title": "类别",
+    "total": "总计",
+    "noExpenses": "暂无支出",
+    "insightTop": "最高消费类别为 {{cat}}，占总支出的 {{pct}}%。",
+    "insightNone": "添加支出以查看类别分布。"
+  },
+  "savings": {
+    "title": "精准汇总",
+    "tracked": "已追踪",
+    "tax": "税费",
+    "tips": "小费",
+    "insight": "已精准追踪 {{amount}} 的税费和小费，占总支出 {{pct}}%。",
+    "acrossExpenses_one": "共 {{count}} 笔含税/小费支出",
+    "acrossExpenses_other": "共 {{count}} 笔含税/小费支出"
+  },
+  "peer": {
+    "title": "成员动态",
+    "debtFlow": "债务流向",
+    "totalSpent": "总支出",
+    "noParticipants": "暂无参与者",
+    "whoPaysWho": "付款关系",
+    "morePayments_one": "还有 {{count}} 笔",
+    "morePayments_other": "还有 {{count}} 笔",
+    "noSpending": "无支出",
+    "isOwed": "应收",
+    "owes": "应付",
+    "fullySettled": "✓ 已结清",
+    "pctSettled": "已结清 {{pct}}%",
+    "splits_one": "{{count}} 笔",
+    "splits_other": "{{count}} 笔",
+    "totalSpentLabel": "总支出：",
+    "pctOfTotal": "占个人总额",
+    "insight": "本视图中 {{pct}}% 的分摊已完全结清。",
+    "insightNone": "添加参与者以查看成员动态。"
+  },
+  "velocity": {
+    "title": "支出速度",
+    "thirtyDay": "30天",
+    "total": "总计",
+    "largeExpenses": "较大支出",
+    "fxTitle": "汇率偏差",
+    "fxDesc_one": "{{count}} 笔支出以外币记录，使用当时汇率。",
+    "fxDesc_other": "{{count}} 笔支出以外币记录，使用当时汇率。",
+    "fxSuffix": "若按今日汇率换算，总额将",
+    "fxMore": "比锁定时多 {{amount}}。",
+    "fxLess": "比锁定时少 {{amount}}。",
+    "insight": "支出较前30天{{dir}} {{pct}}%。",
+    "up": "上涨",
+    "down": "下降",
+    "insightNone": "历史数据不足，无法计算趋势。"
+  },
+  "insightLabel": "智能洞察"
+}

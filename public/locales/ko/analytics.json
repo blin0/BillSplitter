@@ -1,0 +1,70 @@
+{
+  "title": "분석",
+  "summary": "요약",
+  "group": "그룹",
+  "selectGroup": "그룹 선택",
+  "noGroups": "분석을 보려면 그룹에 참여하거나 만드세요.",
+  "cat": {
+    "Dining": "외식",
+    "Coffee": "카페",
+    "Groceries": "식료품",
+    "Travel": "교통",
+    "Bills": "청구서",
+    "Misc": "기타",
+    "Tax": "세금",
+    "Tip": "팁"
+  },
+  "donut": {
+    "title": "카테고리",
+    "total": "합계",
+    "noExpenses": "지출 없음",
+    "insightTop": "최대 지출 카테고리는 {{cat}}이며, 총 지출의 {{pct}}%입니다.",
+    "insightNone": "카테고리 분석을 보려면 지출을 추가하세요."
+  },
+  "savings": {
+    "title": "정밀 합계",
+    "tracked": "추적됨",
+    "tax": "세금",
+    "tips": "팁",
+    "insight": "세금과 팁으로 {{amount}}를 정밀 추적했습니다 — 총 지출의 {{pct}}%.",
+    "acrossExpenses_one": "세금/팁이 있는 {{count}}건 지출에서",
+    "acrossExpenses_other": "세금/팁이 있는 {{count}}건 지출에서"
+  },
+  "peer": {
+    "title": "참여자 현황",
+    "debtFlow": "채무 흐름",
+    "totalSpent": "총 지출",
+    "noParticipants": "참여자 없음",
+    "whoPaysWho": "누가 누구에게 지불하는가",
+    "morePayments_one": "+{{count}}건 더",
+    "morePayments_other": "+{{count}}건 더",
+    "noSpending": "지출 없음",
+    "isOwed": "받을 예정",
+    "owes": "지불 예정",
+    "fullySettled": "✓ 완전 정산",
+    "pctSettled": "{{pct}}% 정산됨",
+    "splits_one": "{{count}}건 분할",
+    "splits_other": "{{count}}건 분할",
+    "totalSpentLabel": "총 지출:",
+    "pctOfTotal": "% 개인 합계 대비",
+    "insight": "이 보기에서 모든 분할의 {{pct}}%가 완전히 정산되었습니다.",
+    "insightNone": "참여자를 추가하여 현황을 확인하세요."
+  },
+  "velocity": {
+    "title": "지출 속도",
+    "thirtyDay": "30일",
+    "total": "합계",
+    "largeExpenses": "큰 지출",
+    "fxTitle": "환율 변동",
+    "fxDesc_one": "{{count}}건의 지출이 해당 날짜 환율로 외화로 기록되었습니다.",
+    "fxDesc_other": "{{count}}건의 지출이 해당 날짜 환율로 외화로 기록되었습니다.",
+    "fxSuffix": "오늘 환율로 환산하면 합계가",
+    "fxMore": "고정 시보다 {{amount}} 더 많습니다.",
+    "fxLess": "고정 시보다 {{amount}} 더 적습니다.",
+    "insight": "지출이 이전 30일 대비 {{dir}} {{pct}}%입니다.",
+    "up": "증가",
+    "down": "감소",
+    "insightNone": "트렌드를 계산하기에 충분한 기록이 없습니다."
+  },
+  "insightLabel": "스마트 인사이트"
+}

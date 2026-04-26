@@ -34,6 +34,8 @@ export interface Expense {
   splits: Split[];
   /** Whether this expense is selected in the Selective Settlement panel */
   isHighlighted: boolean;
+  /** ISO timestamp when the expense was created (from DB created_at). Used for analytics. */
+  date?: string;
   /** Tax rate applied at save time (e.g. 8 means 8%). Undefined = no tax. */
   taxPercent?: number;
   /**

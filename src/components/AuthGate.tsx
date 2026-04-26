@@ -72,6 +72,7 @@ export default function AuthGate() {
                   <Mail size={16} className="text-gray-400 dark:text-slate-500 shrink-0" />
                   <input
                     type="email"
+                    name="email"
                     required
                     placeholder="you@example.com"
                     value={email}

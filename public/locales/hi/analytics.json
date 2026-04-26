@@ -1,0 +1,70 @@
+{
+  "title": "विश्लेषण",
+  "summary": "सारांश",
+  "group": "समूह",
+  "selectGroup": "समूह चुनें",
+  "noGroups": "विश्लेषण देखने के लिए समूह बनाएं या जुड़ें।",
+  "cat": {
+    "Dining": "भोजन",
+    "Coffee": "कॉफी",
+    "Groceries": "किराना",
+    "Travel": "यातायात",
+    "Bills": "बिल",
+    "Misc": "अन्य",
+    "Tax": "कर",
+    "Tip": "टिप"
+  },
+  "donut": {
+    "title": "श्रेणियाँ",
+    "total": "कुल",
+    "noExpenses": "अभी कोई खर्च नहीं",
+    "insightTop": "आपकी सबसे बड़ी श्रेणी {{cat}} है, जो कुल खर्च का {{pct}}% है।",
+    "insightNone": "श्रेणी विवरण देखने के लिए खर्च जोड़ें।"
+  },
+  "savings": {
+    "title": "सटीक कुल",
+    "tracked": "ट्रैक किया",
+    "tax": "कर",
+    "tips": "टिप",
+    "insight": "आपने कर और टिप में {{amount}} ट्रैक किया — कुल खर्च का {{pct}}%।",
+    "acrossExpenses_one": "{{count}} खर्च में कर/टिप के साथ",
+    "acrossExpenses_other": "{{count}} खर्चों में कर/टिप के साथ"
+  },
+  "peer": {
+    "title": "सदस्य गतिशीलता",
+    "debtFlow": "ऋण प्रवाह",
+    "totalSpent": "कुल खर्च",
+    "noParticipants": "अभी कोई भागीदार नहीं",
+    "whoPaysWho": "कौन किसे देता है",
+    "morePayments_one": "+{{count}} और भुगतान",
+    "morePayments_other": "+{{count}} और भुगतान",
+    "noSpending": "कोई खर्च नहीं",
+    "isOwed": "पाना है",
+    "owes": "देना है",
+    "fullySettled": "✓ पूर्ण निपटान",
+    "pctSettled": "{{pct}}% निपटान",
+    "splits_one": "{{count}} बंटवारा",
+    "splits_other": "{{count}} बंटवारे",
+    "totalSpentLabel": "कुल खर्च:",
+    "pctOfTotal": "% उनके कुल का",
+    "insight": "इस दृश्य में {{pct}}% बंटवारे पूरी तरह निपट गए हैं।",
+    "insightNone": "गतिशीलता देखने के लिए भागीदार जोड़ें।"
+  },
+  "velocity": {
+    "title": "खर्च गति",
+    "thirtyDay": "30-दिन",
+    "total": "कुल",
+    "largeExpenses": "बड़े खर्च",
+    "fxTitle": "विनिमय दर बदलाव",
+    "fxDesc_one": "{{count}} खर्च उस दिन की दर पर विदेशी मुद्रा में दर्ज किया गया।",
+    "fxDesc_other": "{{count}} खर्च उस दिन की दर पर विदेशी मुद्राओं में दर्ज किए गए।",
+    "fxSuffix": "आज की दरों पर रूपांतरित करने पर कुल होगा",
+    "fxMore": "लॉक की गई राशि से {{amount}} अधिक।",
+    "fxLess": "लॉक की गई राशि से {{amount}} कम।",
+    "insight": "खर्च पिछले 30 दिनों की तुलना में {{pct}}% {{dir}}।",
+    "up": "बढ़ा",
+    "down": "घटा",
+    "insightNone": "प्रवृत्ति गणना के लिए पर्याप्त इतिहास नहीं।"
+  },
+  "insightLabel": "स्मार्ट अंतर्दृष्टि"
+}
