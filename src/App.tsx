@@ -738,10 +738,14 @@ function AppInner() {
         />
       )}
 
-      {/* Main area */}
+      {/* Main area — no overflow-x-hidden here: the CSS spec forces overflow-y
+          to auto whenever overflow-x is hidden, turning this div into an implicit
+          scroll container. That traps Profile (the longest page) inside a
+          height-constrained non-window scroll which has no iOS momentum.
+          Horizontal clipping is already handled by the parent overflow-x-hidden. */}
       <div className={isSignedIn
-        ? 'flex-1 min-w-0 w-full max-w-full overflow-x-hidden lg:ml-64'
-        : 'flex-1 min-w-0 w-full max-w-full overflow-x-hidden'
+        ? 'flex-1 min-w-0 w-full max-w-full lg:ml-64'
+        : 'flex-1 min-w-0 w-full max-w-full'
       }>
 
         {/* ── Unified header — always visible ── */}
