@@ -1259,7 +1259,7 @@ export default function Landing() {
 
   return (
     <div
-      className="min-h-[100dvh] bg-[#060612] text-white overflow-x-hidden"
+      className="min-h-[100dvh] bg-[#060612] text-white [overflow-x:clip]"
       onMouseMove={IS_MOBILE ? undefined : handleMouseMove}
     >
       <ParallaxBackground mouseX={mouseX} mouseY={mouseY} />
