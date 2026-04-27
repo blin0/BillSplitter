@@ -811,9 +811,14 @@ function BentoCard({
   return (
     <motion.div
       ref={cardRef}
-      onMouseMove={handleMouseMove}
-      whileHover={{ scale: 1.015, zIndex: 10 }}
+      onMouseMove={IS_MOBILE ? undefined : handleMouseMove}
+      // Disable scale-on-hover on touch devices — pointer events fire during
+      // scroll and the mid-scroll scale change confuses the browser's gesture
+      // classifier, causing it to drop the scroll.
+      whileHover={IS_MOBILE ? undefined : { scale: 1.015, zIndex: 10 }}
       transition={{ duration: 0.22, ease: 'easeOut' }}
+      // pan-y: tell the browser vertical touch is always a scroll, not a tap
+      style={{ touchAction: 'pan-y' }}
       className={`group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] ${className}`}
     >
       {/* Glassmorphism top sheen — bg-gradient-to-b from-white/5 to-transparent */}
@@ -847,19 +852,24 @@ function FadeUp({
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-40px 0px' });
 
-  // On mobile: faster animation, smaller offset, halved delay
-  const dur    = IS_MOBILE ? 0.35 : 0.65;
-  const offset = IS_MOBILE ? 14   : 28;
-  const d      = IS_MOBILE ? delay * 0.5 : delay;
+  // On mobile: skip scroll-triggered animation entirely.
+  // useInView fires IntersectionObserver callbacks mid-scroll, which trigger
+  // React state updates and y-translate reflows on the main thread — both
+  // cause jank and can drop the scroll gesture.
+  if (IS_MOBILE) {
+    return <div className={className}>{children}</div>;
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const inView = useInView(ref, { once: true, margin: '-40px 0px' });
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: offset }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: offset }}
-      transition={{ duration: dur, delay: d, ease: EASE }}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 28 }}
+      transition={{ duration: 0.65, delay, ease: EASE }}
       className={className}
     >
       {children}
@@ -1241,7 +1251,7 @@ export default function Landing() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-[#060612] flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-[#060612] flex items-center justify-center">
       <div className="w-6 h-6 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
     </div>
   );
@@ -1249,8 +1259,8 @@ export default function Landing() {
 
   return (
     <div
-      className="min-h-screen bg-[#060612] text-white overflow-x-hidden"
-      onMouseMove={handleMouseMove}
+      className="min-h-[100dvh] bg-[#060612] text-white overflow-x-hidden overscroll-y-contain"
+      onMouseMove={IS_MOBILE ? undefined : handleMouseMove}
     >
       <ParallaxBackground mouseX={mouseX} mouseY={mouseY} />
 
