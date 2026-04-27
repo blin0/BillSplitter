@@ -407,7 +407,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-slate-950 overscroll-y-contain">
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950">
 
       {/* Floating save button — appears when there are unsaved changes */}
       {isDirty && (

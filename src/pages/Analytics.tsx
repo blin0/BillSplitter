@@ -1228,7 +1228,7 @@ export default function Analytics({ groups }: Props) {
   }
 
   return (
-    <div className="min-h-[calc(100dvh-73px)] bg-gray-50 dark:bg-slate-950 gpu-layer overscroll-y-contain">
+    <div className="min-h-[calc(100dvh-73px)] bg-gray-50 dark:bg-slate-950 gpu-layer">
 
       {/* ── Header ── */}
       <div className="border-b border-gray-100 dark:border-slate-800">

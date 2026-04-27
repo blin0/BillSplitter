@@ -717,7 +717,7 @@ function AppInner() {
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
-    <div className="relative flex w-full max-w-full overflow-x-hidden min-h-[100dvh] bg-gray-50 dark:bg-slate-950 overscroll-y-contain">
+    <div className="relative flex w-full max-w-full overflow-x-hidden min-h-[100dvh] bg-gray-50 dark:bg-slate-950">
 
       {/* Sidebar — only when signed in */}
       {isSignedIn && (
