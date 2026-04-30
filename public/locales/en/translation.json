@@ -37,7 +37,7 @@
     },
     "features": {
       "title": "Everything you need to split fairly",
-      "subtitle": "Whether it's a weekend trip or a shared apartment, BillSplitter keeps everyone on the same page.",
+      "subtitle": "Whether it's a weekend trip or a shared apartment, Axiom Splits keeps everyone on the same page.",
       "multicurrency": {
         "title": "Multi-currency",
         "desc": "Log expenses in any of 30+ currencies. Everyone sees totals in their preferred currency with live exchange rates."
@@ -77,10 +77,10 @@
       "button": "Start Splitting Free"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. Built with ♥ for travellers and flatmates."
+      "copyright": "© {{year}} Axiom Splits. Built with ♥ for travellers and flatmates."
     },
     "auth": {
-      "title": "Welcome to BillSplitter",
+      "title": "Welcome to Axiom Splits",
       "subtitle": "Sign in or create a free account",
       "google": "Continue with Google",
       "emailPlaceholder": "you@example.com",
@@ -242,7 +242,7 @@
     "signInDesc": "Sign in to sync your expenses across all your devices."
   },
   "noGroups": {
-    "title": "Welcome to BillSplitter",
+    "title": "Welcome to Axiom Splits",
     "subtitle": "Create a group for your trip, household, or any shared expense — or join one with an invite code.",
     "feature1": "30+ currencies",
     "feature2": "Smart Settle",

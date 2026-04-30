@@ -36,7 +36,7 @@
     },
     "features": {
       "title": "منصفانہ تقسیم کے لیے سب کچھ",
-      "subtitle": "چاہے ویک اینڈ ٹرپ ہو یا مشترکہ گھر، BillSplitter سب کو ہم آہنگ رکھتا ہے۔",
+      "subtitle": "چاہے ویک اینڈ ٹرپ ہو یا مشترکہ گھر، Axiom Splits سب کو ہم آہنگ رکھتا ہے۔",
       "multicurrency": {
         "title": "ملٹی کرنسی",
         "desc": "۳۰+ کرنسیوں میں اخراجات ریکارڈ کریں۔ سب اپنی پسندیدہ کرنسی میں کل دیکھتے ہیں۔"
@@ -76,10 +76,10 @@
       "button": "مفت شروع کریں"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. مسافروں اور ہم رہائشیوں کے لیے ♥ سے بنایا گیا۔"
+      "copyright": "© {{year}} Axiom Splits. مسافروں اور ہم رہائشیوں کے لیے ♥ سے بنایا گیا۔"
     },
     "auth": {
-      "title": "BillSplitter میں خوش آمدید",
+      "title": "Axiom Splits میں خوش آمدید",
       "subtitle": "سائن ان کریں یا مفت اکاؤنٹ بنائیں",
       "google": "Google سے جاری رکھیں",
       "emailPlaceholder": "you@example.com",
@@ -168,7 +168,7 @@
     "signInDesc": "تمام آلات پر اخراجات سنک کرنے کے لیے سائن ان کریں۔"
   },
   "noGroups": {
-    "title": "BillSplitter میں خوش آمدید",
+    "title": "Axiom Splits میں خوش آمدید",
     "subtitle": "سفر، گھر یا کسی مشترکہ خرچ کے لیے گروپ بنائیں — یا دعوت کوڈ سے شامل ہوں۔",
     "feature1": "۳۰+ کرنسیاں",
     "feature2": "سمارٹ سیٹل",

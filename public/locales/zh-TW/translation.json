@@ -37,7 +37,7 @@
     },
     "features": {
       "title": "公平分帳所需的一切",
-      "subtitle": "無論是週末旅遊還是合租公寓，BillSplitter 讓每個人都保持同步。",
+      "subtitle": "無論是週末旅遊還是合租公寓，Axiom Splits 讓每個人都保持同步。",
       "multicurrency": {
         "title": "多貨幣支援",
         "desc": "支援 30+ 種貨幣記錄支出，所有人都能以自己偏好的貨幣查看總額，匯率即時更新。"
@@ -77,10 +77,10 @@
       "button": "免費開始分帳"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. 為旅行者和合租者用心打造。"
+      "copyright": "© {{year}} Axiom Splits. 為旅行者和合租者用心打造。"
     },
     "auth": {
-      "title": "歡迎來到 BillSplitter",
+      "title": "歡迎來到 Axiom Splits",
       "subtitle": "登入或建立免費帳戶",
       "google": "使用 Google 繼續",
       "emailPlaceholder": "you@example.com",
@@ -242,7 +242,7 @@
     "signInDesc": "登入以在所有裝置上同步您的支出。"
   },
   "noGroups": {
-    "title": "歡迎來到 BillSplitter",
+    "title": "歡迎來到 Axiom Splits",
     "subtitle": "為旅行、合租或任何共同支出建立群組——或使用邀請碼加入。",
     "feature1": "30+ 種貨幣",
     "feature2": "智慧結算",

@@ -1,7 +1,7 @@
 {
-  "name": "BillSplitter",
-  "short_name": "BillSplitter",
-  "description": "Split bills, not friendships. Multi-currency expense splitting with Smart Settle.",
+  "name": "Axiom Splits",
+  "short_name": "Axiom Splits",
+  "description": "Precision expense sharing. Multi-currency splits, Smart Settle, and real-time sync for groups of any size.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
@@ -20,6 +20,18 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

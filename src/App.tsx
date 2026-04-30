@@ -738,15 +738,19 @@ function AppInner() {
         />
       )}
 
-      {/* Main area — no overflow-x-hidden here: the CSS spec forces overflow-y
-          to auto whenever overflow-x is hidden, turning this div into an implicit
-          scroll container. That traps Profile (the longest page) inside a
-          height-constrained non-window scroll which has no iOS momentum.
-          Horizontal clipping is already handled by the parent overflow-x-hidden. */}
-      <div className={isSignedIn
-        ? 'flex-1 min-w-0 w-full max-w-full lg:ml-64'
-        : 'flex-1 min-w-0 w-full max-w-full'
-      }>
+      {/* Main area — one deliberate scroll container (h-[100dvh] overflow-y-auto)
+          so iOS Safari has an unambiguous target and applies full momentum scroll
+          from the very first touch. overflow-x-hidden is safe here because both
+          axes are set explicitly, preventing the CSS spec's asymmetric-overflow
+          promotion (hidden+visible → hidden+auto) that would create a nested
+          scroll container.                                                      */}
+      <div
+        className={isSignedIn
+          ? 'flex-1 min-w-0 w-full max-w-full lg:ml-64 h-[100dvh] overflow-x-hidden overflow-y-auto'
+          : 'flex-1 min-w-0 w-full max-w-full h-[100dvh] overflow-x-hidden overflow-y-auto'
+        }
+        style={{ touchAction: 'pan-y' }}
+      >
 
         {/* ── Unified header — always visible ── */}
         <header className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
@@ -778,13 +782,11 @@ function AppInner() {
                 : undefined}
               aria-label={isProfilePage && isSignedIn ? 'Back to dashboard' : undefined}
             >
-              <div className="p-2 bg-violet-600 rounded-xl shrink-0">
-                <Receipt size={20} className="text-white" />
-              </div>
+              <img src="/favicon.svg" alt="Axiom Splits" className="w-9 h-9 shrink-0" />
 
               <div className="min-w-0">
                 <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-none">
-                  BillSplitter
+                  Axiom Splits
                 </h1>
                 {isProfilePage && isSignedIn ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500">{t('nav.profile')}</p>
@@ -962,7 +964,7 @@ function AppInner() {
                     </div>
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-2">
-                    Welcome to BillSplitter
+                    Welcome to Axiom Splits
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
                     Create a group for your trip, household, or any shared expense — or join one with an invite code.

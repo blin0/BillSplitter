@@ -37,7 +37,7 @@
     },
     "features": {
       "title": "공평한 분담에 필요한 모든 것",
-      "subtitle": "주말 여행이든 공동 생활이든, BillSplitter로 모든 사람이 같은 정보를 공유하세요.",
+      "subtitle": "주말 여행이든 공동 생활이든, Axiom Splits로 모든 사람이 같은 정보를 공유하세요.",
       "multicurrency": {
         "title": "다중 통화",
         "desc": "30개 이상의 통화로 지출을 기록하세요. 모든 사람이 실시간 환율로 선호 통화의 합계를 확인할 수 있습니다."
@@ -77,10 +77,10 @@
       "button": "무료로 시작하기"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. 여행자와 룸메이트를 위해 만들었습니다."
+      "copyright": "© {{year}} Axiom Splits. 여행자와 룸메이트를 위해 만들었습니다."
     },
     "auth": {
-      "title": "BillSplitter에 오신 것을 환영합니다",
+      "title": "Axiom Splits에 오신 것을 환영합니다",
       "subtitle": "로그인하거나 무료 계정을 만드세요",
       "google": "Google로 계속하기",
       "emailPlaceholder": "you@example.com",
@@ -242,7 +242,7 @@
     "signInDesc": "로그인하여 모든 기기에서 지출을 동기화하세요."
   },
   "noGroups": {
-    "title": "BillSplitter에 오신 것을 환영합니다",
+    "title": "Axiom Splits에 오신 것을 환영합니다",
     "subtitle": "여행, 공동 생활 또는 공동 지출을 위한 그룹을 만들거나 초대 코드로 참여하세요.",
     "feature1": "30개 이상의 통화",
     "feature2": "스마트 정산",

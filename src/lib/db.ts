@@ -1,5 +1,5 @@
 /**
- * db.ts — Supabase service layer for BillSplitter
+ * db.ts — Supabase service layer for Axiom Splits
  *
  * All functions return { data, error } pairs.
  * Mapping between frontend types (src/types.ts) and DB rows lives here.

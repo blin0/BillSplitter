@@ -10,9 +10,12 @@ html {
 }
 
 
-/* Prevent horizontal overflow globally */
+/* Prevent horizontal overflow globally.
+   overflow-x: clip (not hidden) so the browser does NOT promote overflow-y to
+   auto, which would turn html/body into implicit scroll containers and cause
+   the "two scrolls required" phenomenon on iOS Safari.                        */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 
@@ -96,6 +99,27 @@ body,
 /* Ensure padding/border never add to element widths */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+/* ── Autofill override — Chrome/Safari aggressively apply a light-blue or
+   yellow highlight to autofilled inputs. The transition trick freezes the
+   background-color in its initial state for an absurdly long duration so the
+   browser animation never completes. The inset box-shadow paints our dark
+   background on top of whatever the UA renders. Both are needed because
+   Chrome honours box-shadow, while Safari is more reliably stopped by the
+   transition delay.                                                           */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  /* Freeze the UA background-color animation so the tint never appears.
+     Safari uses this mechanism; Chrome relies on the per-component
+     box-shadow override applied via Tailwind's autofill: variant.           */
+  transition: background-color 9999s ease-in-out 0s !important;
+  /* Force white text; UA may set this independently of `color`.             */
+  -webkit-text-fill-color: #ffffff !important;
+  /* Brand violet cursor — stays visible on the dark autofill background.   */
+  caret-color: #a78bfa;
 }
 
 /* Hide native number-input spinners globally */

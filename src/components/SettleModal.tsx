@@ -228,7 +228,7 @@ export default function SettleModal({
   // Exclude the logged-in user — you shouldn't pay yourself.
   const invitedMembers = profiles.filter(p => p.userId !== currentUserId);
 
-  const note = encodeURIComponent(`BillSplitter: ${groupName ?? 'group'}`);
+  const note = encodeURIComponent(`Axiom Splits: ${groupName ?? 'group'}`);
 
   function makeVenmoUrl(handle: string) {
     return `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}&amount=${parsedAmount}&note=${note}`;

@@ -14,6 +14,7 @@ import {
 } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import AuthCard from '../components/AuthCard';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -1096,133 +1097,32 @@ function ParallaxBackground({
 // ─── Auth modal ───────────────────────────────────────────────────────────────
 
 function AuthModal({ onClose }: { onClose: () => void }) {
-  const { signInWithGoogle, signInWithEmail } = useAuth();
-  const { t } = useTranslation();
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'sent' | 'error'>('idle');
-  const [errorMsg, setErrorMsg] = useState('');
-
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Lock body scroll
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
 
-  async function handleEmail(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setStatus('loading');
-    const { error } = await signInWithEmail(email.trim());
-    if (error) { setErrorMsg(error); setStatus('error'); }
-    else setStatus('sent');
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      {/* Backdrop */}
       <motion.div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
       />
-
-      {/* Panel */}
       <motion.div
-        className="relative w-full max-w-sm rounded-2xl border border-white/[0.10] bg-[#0d0b1e] shadow-2xl shadow-black/60 overflow-hidden"
+        className="relative w-full max-w-sm"
         initial={{ opacity: 0, scale: 0.94, y: 16 }}
         animate={{ opacity: 1, scale: 1,    y: 0  }}
         exit={{    opacity: 0, scale: 0.94, y: 16 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Top sheen */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-violet-600/10 to-transparent" />
-
-        <div className="relative p-8">
-          {/* Close */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/[0.08] transition-colors"
-            aria-label="Close"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-
-          <div className="mb-6 text-center">
-            <img src="/favicon.svg" alt="" className="w-8 h-8 mx-auto mb-3 opacity-90" />
-            <h2 className="text-xl font-bold tracking-tight mb-1">{t('landing.auth.title')}</h2>
-            <p className="text-sm text-slate-400">{t('landing.auth.subtitle')}</p>
-          </div>
-
-          {status === 'sent' ? (
-            <div className="text-center py-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                  <path d="M4 11l5 5 9-9" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <p className="font-semibold mb-1">{t('landing.auth.emailSentTitle')}</p>
-              <p className="text-sm text-slate-400">{t('landing.auth.emailSentDesc')} <span className="text-white">{email}</span></p>
-            </div>
-          ) : (
-            <>
-              {/* Google */}
-              <button
-                onClick={() => signInWithGoogle()}
-                className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] transition-colors text-sm font-medium mb-4"
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-                  <path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
-                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-                </svg>
-                {t('landing.auth.google')}
-              </button>
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 h-px bg-white/[0.08]" />
-                <span className="text-[11px] text-slate-600 uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-white/[0.08]" />
-              </div>
-
-              {/* Email magic link */}
-              <form onSubmit={handleEmail} className="space-y-3">
-                <input
-                  type="email"
-                  name="email"
-                  placeholder={t('landing.auth.emailPlaceholder')}
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setStatus('idle'); }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/[0.10] bg-white/[0.04] text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/60 focus:bg-white/[0.06] transition-colors"
-                  required
-                />
-                {status === 'error' && (
-                  <p className="text-xs text-red-400">{errorMsg}</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={status === 'loading'}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 transition-all"
-                >
-                  {status === 'loading' ? t('landing.auth.emailSending') : t('landing.auth.emailButton')}
-                </button>
-              </form>
-
-              <p className="mt-5 text-center text-[11px] text-slate-600">
-                {t('landing.auth.terms')}
-              </p>
-            </>
-          )}
-        </div>
+        <AuthCard onClose={onClose} />
       </motion.div>
     </div>
   );
@@ -1275,7 +1175,7 @@ export default function Landing() {
       >
         <div className="flex items-center gap-2.5">
           <img src="/favicon.svg" alt="" className="w-7 h-7" />
-          <span className="font-bold text-lg tracking-tight">BillSplitter</span>
+          <span className="font-bold text-lg tracking-tight">Axiom Splits</span>
         </div>
         <div className="flex items-center gap-3">
           <LanguageSwitcher variant="light" />
@@ -1620,7 +1520,7 @@ export default function Landing() {
       <footer className="relative z-10 border-t border-white/[0.06] px-6 py-8 text-center text-slate-600 text-sm">
         <div className="flex items-center justify-center gap-2 mb-2">
           <img src="/favicon.svg" alt="" className="w-5 h-5 opacity-50" />
-          <span className="font-semibold text-slate-500">BillSplitter</span>
+          <span className="font-semibold text-slate-500">Axiom Splits</span>
         </div>
         <p>{t('landing.footer.copyright', { year: new Date().getFullYear() })}</p>
       </footer>

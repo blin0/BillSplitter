@@ -11,12 +11,14 @@ import { supabase } from '../lib/supabase';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AuthContextValue {
-  session:          Session | null;
-  user:             User    | null;
-  loading:          boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail:  (email: string) => Promise<{ error: string | null }>;
-  signOut:          () => Promise<void>;
+  session:              Session | null;
+  user:                 User    | null;
+  loading:              boolean;
+  signInWithGoogle:     () => Promise<void>;
+  signInWithEmail:      (email: string) => Promise<{ error: string | null }>;
+  signInWithPassword:   (email: string, password: string) => Promise<{ error: string | null }>;
+  signUpWithPassword:   (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut:              () => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -68,6 +70,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   }
 
+  async function signInWithPassword(email: string, password: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ?? null };
+  }
+
+  async function signUpWithPassword(email: string, password: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.signUp({ email, password });
+    return { error: error?.message ?? null };
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
   }
@@ -80,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signInWithGoogle,
         signInWithEmail,
+        signInWithPassword,
+        signUpWithPassword,
         signOut,
       }}
     >

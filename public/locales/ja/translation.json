@@ -37,7 +37,7 @@
     },
     "features": {
       "title": "公平な割り勘に必要なすべて",
-      "subtitle": "週末旅行でも共同生活でも、BillSplitterで全員が同じ情報を共有。",
+      "subtitle": "週末旅行でも共同生活でも、Axiom Splitsで全員が同じ情報を共有。",
       "multicurrency": {
         "title": "多通貨対応",
         "desc": "30以上の通貨で支出を記録。全員がリアルタイムの為替レートで希望の通貨の合計を確認できます。"
@@ -77,10 +77,10 @@
       "button": "無料で始める"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. 旅行者とルームメイトのために作られました。"
+      "copyright": "© {{year}} Axiom Splits. 旅行者とルームメイトのために作られました。"
     },
     "auth": {
-      "title": "BillSplitterへようこそ",
+      "title": "Axiom Splitsへようこそ",
       "subtitle": "ログインまたは無料アカウントを作成",
       "google": "Googleで続ける",
       "emailPlaceholder": "you@example.com",
@@ -242,7 +242,7 @@
     "signInDesc": "ログインしてすべてのデバイスで支出を同期してください。"
   },
   "noGroups": {
-    "title": "BillSplitterへようこそ",
+    "title": "Axiom Splitsへようこそ",
     "subtitle": "旅行、共同生活、または共有費用のためにグループを作成するか、招待コードで参加してください。",
     "feature1": "30以上の通貨",
     "feature2": "スマート精算",

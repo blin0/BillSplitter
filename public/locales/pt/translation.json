@@ -37,7 +37,7 @@
     },
     "features": {
       "title": "Tudo que você precisa para dividir com equidade",
-      "subtitle": "Seja uma viagem de fim de semana ou um apartamento compartilhado, o BillSplitter mantém todos na mesma página.",
+      "subtitle": "Seja uma viagem de fim de semana ou um apartamento compartilhado, o Axiom Splits mantém todos na mesma página.",
       "multicurrency": {
         "title": "Multimoeда",
         "desc": "Registre despesas em mais de 30 moedas. Todos veem os totais na moeda preferida com taxas de câmbio em tempo real."
@@ -77,10 +77,10 @@
       "button": "Começar gratuitamente"
     },
     "footer": {
-      "copyright": "© {{year}} BillSplitter. Feito com ♥ para viajantes e colegas de quarto."
+      "copyright": "© {{year}} Axiom Splits. Feito com ♥ para viajantes e colegas de quarto."
     },
     "auth": {
-      "title": "Bem-vindo ao BillSplitter",
+      "title": "Bem-vindo ao Axiom Splits",
       "subtitle": "Entre ou crie uma conta gratuita",
       "google": "Continuar com Google",
       "emailPlaceholder": "você@exemplo.com",
@@ -242,7 +242,7 @@
     "signInDesc": "Entre para sincronizar suas despesas em todos os seus dispositivos."
   },
   "noGroups": {
-    "title": "Bem-vindo ao BillSplitter",
+    "title": "Bem-vindo ao Axiom Splits",
     "subtitle": "Crie um grupo para sua viagem, lar ou qualquer despesa compartilhada — ou entre com um código de convite.",
     "feature1": "30+ moedas",
     "feature2": "Smart Settle",
