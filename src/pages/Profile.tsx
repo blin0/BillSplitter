@@ -8,8 +8,8 @@ import {
   type OwnProfile, type OwnStats,
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
-import { useSubscription } from '../hooks/useSubscription';
-import { STRIPE_PRICES, tierForPrice } from '../lib/stripe-prices';
+import { useSubscriptionContext } from '../context/SubscriptionContext';
+import { STRIPE_PRICES } from '../lib/stripe-prices';
 
 interface Props {
   authEmail:                    string | null;
@@ -231,21 +231,31 @@ function Section({ title, icon, children, className }: {
 
 // ─── Avatar upload ────────────────────────────────────────────────────────────
 
-function AvatarUpload({ initials, avatarUrl, uploading, onUpload }: {
+function AvatarUpload({ initials, avatarUrl, uploading, onUpload, tier }: {
   initials:  string;
   avatarUrl: string | null;
   uploading: boolean;
   onUpload:  (file: File) => void;
+  tier:      0 | 1 | 2 | 3;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => setImgError(false), [avatarUrl]);
+
+  const bgClass = tier >= 2
+    ? 'bg-gradient-to-br from-[#FBBF24] to-[#EC4899]'
+    : tier === 1
+      ? 'bg-gradient-to-br from-[#8B5CF6] to-[#3B82F6]'
+      : 'bg-slate-700';
 
   return (
     <div className="relative shrink-0 group" style={{ width: 80, height: 80 }}>
-      <div className="w-20 h-20 rounded-2xl overflow-hidden bg-violet-600 flex items-center justify-center ring-2 ring-violet-200 dark:ring-violet-800">
-        {avatarUrl
-          ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-          : <span className="text-white text-3xl font-bold select-none">{initials}</span>}
+      <div className={cn('w-20 h-20 rounded-full overflow-hidden flex items-center justify-center border border-white/10', bgClass)}>
+        {avatarUrl && !imgError
+          ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" onError={() => setImgError(true)} />
+          : <span className="text-white text-xl font-bold select-none tracking-wide">{initials}</span>}
       </div>
 
       {/* Camera overlay */}
@@ -253,7 +263,7 @@ function AvatarUpload({ initials, avatarUrl, uploading, onUpload }: {
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center gap-0.5 bg-black/0 group-hover:bg-black/50 transition-all text-transparent group-hover:text-white disabled:cursor-not-allowed"
+        className="absolute inset-0 rounded-full flex flex-col items-center justify-center gap-0.5 bg-black/0 group-hover:bg-black/50 transition-all text-transparent group-hover:text-white disabled:cursor-not-allowed"
         aria-label={t('profile.changePhoto')}
       >
         {uploading
@@ -389,7 +399,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     setTimeout(() => setSaved(false), 2500);
   }
 
-  const subscription = useSubscription();
+  const subscription = useSubscriptionContext();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError,   setCheckoutError  ] = useState<string | null>(null);
   const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
@@ -403,7 +413,12 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     window.location.href = url;
   }
 
-  const initials = (displayName || authName || authEmail || '?')[0].toUpperCase();
+  const initials = (() => {
+    const name = displayName || authName || authEmail || '?';
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -448,12 +463,15 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-5">
               <div className="flex items-center gap-5">
                 {/* Avatar */}
-                <AvatarUpload
-                  initials={initials}
-                  avatarUrl={avatarUrl}
-                  uploading={avatarUploading}
-                  onUpload={handleAvatarUpload}
-                />
+                <div className={subscription.actualTier === 3 ? 'dev-tier-avatar rounded-full shrink-0' : 'shrink-0'}>
+                  <AvatarUpload
+                    initials={initials}
+                    avatarUrl={avatarUrl}
+                    uploading={avatarUploading}
+                    onUpload={handleAvatarUpload}
+                    tier={subscription.actualTier}
+                  />
+                </div>
 
                 {/* Fields */}
                 <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -639,7 +657,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                       >
                         {t('profile.yearly')}
                         <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold leading-none">
-                          {t('profile.save20')}
+                          {t('profile.save40')}
                         </span>
                       </button>
                     </div>
@@ -650,11 +668,44 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                     <p className="text-xs text-red-500 dark:text-red-400 text-center">{checkoutError}</p>
                   )}
 
+                  {/* ── Developer tier switcher ── */}
+                  {subscription.actualTier === 3 && (
+                    <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-900/20 via-violet-900/20 to-indigo-900/20 border border-violet-700/30">
+                      <span className="text-[10px] text-violet-400 font-bold uppercase tracking-widest shrink-0">
+                        Dev Preview
+                      </span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {([
+                          { label: 'Free',      tier: 0 as const },
+                          { label: 'Pro',       tier: 1 as const },
+                          { label: 'Premier',   tier: 2 as const },
+                          { label: 'All Access', tier: null },
+                        ] as { label: string; tier: 0 | 1 | 2 | null }[]).map(({ label, tier }) => {
+                          const isActive = subscription.previewTier === tier;
+                          return (
+                            <button
+                              key={label}
+                              onClick={() => subscription.setPreviewTier(tier)}
+                              className={cn(
+                                'px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition-all',
+                                isActive
+                                  ? 'bg-violet-600 text-white shadow-sm'
+                                  : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white',
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── 3-tier grid ── */}
                   {(() => {
-                    const currentTier = subscription.isPro
-                      ? tierForPrice(subscription.priceId)
-                      : 'free';
+                    const tierNames = ['free', 'pro', 'premier', 'premier'] as const;
+                    const currentTier = tierNames[Math.min(subscription.subscriptionTier, 2)];
+                    const isDev = subscription.actualTier === 3;
 
                     const proPrice    = billingCycle === 'yearly' ? STRIPE_PRICES.PRO_YEARLY     : STRIPE_PRICES.PRO_MONTHLY;
                     const premierPrice = billingCycle === 'yearly' ? STRIPE_PRICES.PREMIER_YEARLY : STRIPE_PRICES.PREMIER_MONTHLY;
@@ -700,7 +751,6 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                       const isCurrent  = currentTier === tier;
                       const isComingSoon = !!priceId && priceId.startsWith('price_TODO');
                       const isLoading  = !!priceId && checkoutLoading === priceId;
-                      const displayPrice = billingCycle === 'yearly' ? yearlyMonthly : monthlyPrice;
                       const isFree     = tier === 'free';
 
                       const cardInner = (
@@ -715,7 +765,14 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           {/* Current badge */}
                           {isCurrent && (
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shadow-md">
+                              <span className={cn(
+                                'px-2.5 py-0.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shadow-md',
+                                isFree
+                                  ? 'bg-emerald-500'
+                                  : popular
+                                    ? 'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6]'
+                                    : 'bg-gradient-to-r from-[#FBBF24] to-[#EC4899]',
+                              )}>
                                 {t('profile.currentPlan')}
                               </span>
                             </div>
@@ -734,6 +791,11 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                             {tier === 'premier' && (
                               <Crown size={12} className="text-violet-600 dark:text-amber-400 shrink-0" />
                             )}
+                            {tier === 'premier' && isDev && (
+                              <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 text-white text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+                                Developer / Internal
+                              </span>
+                            )}
                             {popular && (
                               <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
                                 {t('profile.mostPopular')}
@@ -747,18 +809,26 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                               <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
                                 {t('profile.free')}
                               </p>
-                            ) : (
+                            ) : billingCycle === 'yearly' ? (
                               <>
-                                <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
-                                  {displayPrice}
-                                  <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
-                                </p>
-                                {billingCycle === 'yearly' && (
-                                  <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                                    {t('profile.billedYearly', { total: yearlyTotal })}
+                                <div className="flex items-baseline gap-2">
+                                  <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                    {monthlyPrice}
+                                  </del>
+                                  <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
+                                    {yearlyMonthly}
+                                    <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
                                   </p>
-                                )}
+                                </div>
+                                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
+                                  {t('profile.billedYearly', { total: yearlyTotal })}
+                                </p>
                               </>
+                            ) : (
+                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
+                                {monthlyPrice}
+                                <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                              </p>
                             )}
                           </div>
 
@@ -770,13 +840,36 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           </ul>
 
                           {/* CTA button */}
-                          {isCurrent ? (
+                          {isDev && subscription.previewTier === null && !isFree ? (
                             <button
                               disabled
-                              className="w-full py-2 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 cursor-not-allowed"
+                              className="w-full py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-fuchsia-900/30 via-violet-900/30 to-indigo-900/30 text-violet-300 border border-violet-700/40 cursor-not-allowed"
                             >
-                              {t('profile.currentPlan')}
+                              Enabled via Developer Mode
                             </button>
+                          ) : isCurrent ? (
+                            isFree ? (
+                              <button
+                                disabled
+                                className="w-full py-2 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 cursor-not-allowed"
+                              >
+                                {t('profile.currentPlan')}
+                              </button>
+                            ) : popular ? (
+                              <button
+                                disabled
+                                className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] opacity-90 cursor-not-allowed shadow-inner"
+                              >
+                                {t('profile.currentPlan')}
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-[#FBBF24] to-[#EC4899] opacity-90 cursor-not-allowed shadow-inner"
+                              >
+                                {t('profile.currentPlan')}
+                              </button>
+                            )
                           ) : isFree ? (
                             <button
                               disabled
@@ -797,8 +890,8 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                               disabled={isLoading || !priceId}
                               className={cn(
                                 'w-full py-2 rounded-xl text-sm font-bold text-white text-center transition-all',
-                                'bg-gradient-to-r from-purple-500 via-pink-400 to-amber-300',
-                                'hover:from-purple-600 hover:via-pink-500 hover:to-amber-400',
+                                'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6]',
+                                'hover:from-[#7C3AED] hover:to-[#2563EB]',
                                 'shadow-inner active:scale-95 hover:scale-[1.02]',
                                 'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
                               )}
@@ -854,8 +947,8 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           tier="pro"
                           name={t('profile.tier.pro')}
                           monthlyPrice="$4.99"
-                          yearlyMonthly="$3.99"
-                          yearlyTotal="$47.88"
+                          yearlyMonthly="$2.99"
+                          yearlyTotal="$35.88"
                           priceId={proPrice}
                           popular
                           features={[
@@ -870,8 +963,8 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           tier="premier"
                           name={t('profile.tier.premier')}
                           monthlyPrice="$9.99"
-                          yearlyMonthly="$7.99"
-                          yearlyTotal="$95.88"
+                          yearlyMonthly="$5.99"
+                          yearlyTotal="$71.88"
                           priceId={premierPrice}
                           features={[
                             { text: t('profile.tier.unlimitedGroups'), bold: true },

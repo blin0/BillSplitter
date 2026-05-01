@@ -212,6 +212,15 @@ export async function fetchOwnGroupCount(): Promise<DbResult<number>> {
   return { data: count ?? 0, error: error?.message ?? null };
 }
 
+/** Count authenticated members in a group. Used for member-limit gate. */
+export async function fetchGroupMemberCount(groupId: string): Promise<DbResult<number>> {
+  const { count, error } = await supabase
+    .from('members')
+    .select('*', { count: 'exact', head: true })
+    .eq('group_id', groupId);
+  return { data: count ?? 0, error: error?.message ?? null };
+}
+
 /** Permanently delete the current user's auth account and all their data. */
 export async function deleteOwnAccount(): Promise<DbResult<void>> {
   const { error } = await supabase.rpc('delete_own_account');
@@ -782,6 +791,24 @@ export interface FeedbackPayload {
   email:    string | null;
   category: string;
   message:  string;
+}
+
+export interface FeedbackRow {
+  id:         string;
+  user_id:    string | null;
+  email:      string | null;
+  message:    string;
+  category:   'bug' | 'feature' | 'general';
+  created_at: string;
+}
+
+export async function fetchAllFeedback(): Promise<DbResult<FeedbackRow[]>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from('feedback')
+    .select('id, user_id, email, message, category, created_at')
+    .order('created_at', { ascending: false });
+  return { data: data ?? null, error: error?.message ?? null };
 }
 
 export async function submitFeedback(payload: FeedbackPayload): Promise<DbResult<void>> {

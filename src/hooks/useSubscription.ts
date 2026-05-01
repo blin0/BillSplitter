@@ -2,77 +2,82 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export interface SubscriptionState {
-  isPro:              boolean;
+  /** 0 = Free, 1 = Pro, 2 = Premier, 3 = Developer/Internal */
+  subscriptionTier:   0 | 1 | 2 | 3;
   subscriptionStatus: string | null;
   priceId:            string | null;
+  /** Derived convenience — true when tier >= 1. */
+  isPro:              boolean;
   loading:            boolean;
 }
 
 /**
- * Reads the current user's subscription state directly from the `profiles` table.
- * Subscribes to realtime changes so the UI updates immediately after a webhook
- * fires and Supabase updates the row.
+ * Reads subscription state from `profiles` and subscribes to real-time
+ * postgres_changes so the UI updates the instant a Stripe webhook fires
+ * or the row is edited directly in the Supabase Table Editor.
+ *
+ * Prefer consuming via SubscriptionContext rather than calling this hook
+ * directly — the context calls it once at the root and fans the result out.
  */
 export function useSubscription(): SubscriptionState {
   const [state, setState] = useState<SubscriptionState>({
-    isPro:              false,
+    subscriptionTier:   0,
     subscriptionStatus: null,
     priceId:            null,
+    isPro:              false,
     loading:            true,
   });
 
   useEffect(() => {
     let cancelled = false;
-    // Unique name per effect invocation so StrictMode's double-mount never hits
-    // the "already subscribed" error on the same channel name.
-    const channelName = `profile-subscription-${Math.random().toString(36).slice(2)}`;
+    const channelName = `profile-sub-${Math.random().toString(36).slice(2)}`;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    function applyRow(r: {
+      subscription_tier:   number | null;
+      subscription_status: string | null;
+      price_id:            string | null;
+    }) {
+      const tier = (Math.min(Math.max(r.subscription_tier ?? 0, 0), 3)) as 0 | 1 | 2 | 3;
+      setState({
+        subscriptionTier:   tier,
+        subscriptionStatus: r.subscription_status ?? null,
+        priceId:            r.price_id            ?? null,
+        isPro:              tier >= 1,
+        loading:            false,
+      });
+    }
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
 
       if (!user) {
-        setState({ isPro: false, subscriptionStatus: null, priceId: null, loading: false });
+        setState({ subscriptionTier: 0, subscriptionStatus: null, priceId: null, isPro: false, loading: false });
         return;
       }
 
       const { data } = await supabase
         .from('profiles')
-        .select('is_pro, subscription_status, price_id')
+        .select('subscription_tier, subscription_status, price_id')
         .eq('id', user.id)
         .single();
 
       if (cancelled) return;
-
-      if (data) {
-        setState({
-          isPro:              data.is_pro              ?? false,
-          subscriptionStatus: data.subscription_status ?? null,
-          priceId:            data.price_id            ?? null,
-          loading:            false,
-        });
-      } else {
-        setState(s => ({ ...s, loading: false }));
-      }
-
+      if (data) applyRow(data);
+      else setState(s => ({ ...s, loading: false }));
       if (cancelled) return;
 
-      // Realtime: update UI the moment Stripe webhook fires.
-      // Assigned to the outer `channel` ref so the effect cleanup can remove it.
       channel = supabase
         .channel(channelName)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
           (payload) => {
-            if (cancelled) return;
-            const r = payload.new as { is_pro: boolean; subscription_status: string | null; price_id: string | null };
-            setState({
-              isPro:              r.is_pro              ?? false,
-              subscriptionStatus: r.subscription_status ?? null,
-              priceId:            r.price_id            ?? null,
-              loading:            false,
+            if (!cancelled) applyRow(payload.new as {
+              subscription_tier:   number | null;
+              subscription_status: string | null;
+              price_id:            string | null;
             });
           },
         )
@@ -81,8 +86,6 @@ export function useSubscription(): SubscriptionState {
 
     load();
 
-    // This is the cleanup React actually uses — it runs on unmount and on
-    // StrictMode's synthetic unmount, so the channel is always removed.
     return () => {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);

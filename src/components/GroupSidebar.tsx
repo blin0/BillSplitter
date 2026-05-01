@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent } from 'lucide-react';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, createGroup, joinGroupByCode } from '../lib/db';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, fetchGroupMemberCount, createGroup, joinGroupByCode } from '../lib/db';
 import { useCurrency } from '../context/CurrencyContext';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscriptionContext } from '../context/SubscriptionContext';
+import { groupLimit, memberLimit, nextTierName } from '../lib/hasAccess';
 import ConfirmModal from './ui/ConfirmModal';
 
 interface Props {
@@ -26,6 +27,8 @@ interface Props {
   onOpenProfile:   () => void;
   /** Navigate to the Analytics page */
   onOpenAnalytics: () => void;
+  /** Navigate to the Feedback dashboard (dev tier only) */
+  onOpenFeedback?: () => void;
   /** Called after admin saves a new group default tax rate */
   onGroupTaxRateChanged: (groupId: string, rate: number | null) => void;
 }
@@ -213,12 +216,14 @@ export default function GroupSidebar({
   onGroupDeleted,
   onOpenProfile,
   onOpenAnalytics,
+  onOpenFeedback,
   onGroupTaxRateChanged,
 }: Props) {
   const { t } = useTranslation();
   const location       = useLocation();
-  const isProfilePage  = location.pathname === '/profile';
+  const isProfilePage   = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname.startsWith('/analytics');
+  const isFeedbackPage  = location.pathname === '/feedback';
   const { currency }   = useCurrency();
   const [copied,          setCopied         ] = useState(false);
   const [groupsOpen,      setGroupsOpen     ] = useState(true);   // default expanded
@@ -251,8 +256,16 @@ export default function GroupSidebar({
   const [joinLoading,   setJoinLoading  ] = useState(false);
   const [joinError,     setJoinError    ] = useState<string | null>(null);
 
-  const subscription = useSubscription();
-  const FREE_TIER_GROUP_LIMIT = 3;
+  const subscription = useSubscriptionContext();
+
+  // ── Member count for invite-code gate ──────────────────────────────────────
+  const [memberCount, setMemberCount] = useState(0);
+  useEffect(() => {
+    if (!activeGroupId) return;
+    fetchGroupMemberCount(activeGroupId).then(({ data }) => {
+      if (data != null) setMemberCount(data);
+    });
+  }, [activeGroupId]);
 
   // Seed tax input when active group changes
   useEffect(() => {
@@ -353,9 +366,10 @@ export default function GroupSidebar({
     setCreateError(null);
     setBlocked(false);
     setCreateLoading(true);
-    if (!subscription.isPro) {
+    const limit = groupLimit(subscription.subscriptionTier);
+    if (limit !== null) {
       const { data: count } = await fetchOwnGroupCount();
-      if ((count ?? 0) >= FREE_TIER_GROUP_LIMIT) {
+      if ((count ?? 0) >= limit) {
         setCreateLoading(false);
         setBlocked(true);
         return;
@@ -559,28 +573,56 @@ export default function GroupSidebar({
           </div>
 
           {/* ── Active group's invite code ── */}
-          {activeGroup && (
-            <div className="mx-3 mt-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-1.5">
-                {t('groups.inviteCode')}
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="flex-1 font-mono text-base font-bold tracking-[0.2em] text-gray-900 dark:text-slate-100">
-                  {activeGroup.joinCode}
-                </span>
-                <button
-                  onClick={() => copyCode(activeGroup.joinCode)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
-                  aria-label={t('sidebar.copyInviteCode')}
-                >
-                  {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                </button>
+          {activeGroup && (() => {
+            const mLimit = memberLimit(subscription.subscriptionTier);
+            const atMemberLimit = mLimit !== null && memberCount >= mLimit;
+            return (
+              <div className="mx-3 mt-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-1.5">
+                  {t('groups.inviteCode')}
+                </p>
+                {atMemberLimit ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Lock size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-gray-600 dark:text-slate-400 leading-snug">
+                        Member limit reached ({mLimit}/{mLimit}). Upgrade to add more.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { onOpenProfile(); onClose(); }}
+                      className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-xs font-semibold rounded-lg py-1.5 transition-all hover:scale-[1.02] active:scale-95"
+                    >
+                      <Sparkles size={11} />
+                      Upgrade to {nextTierName(subscription.subscriptionTier)}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 font-mono text-base font-bold tracking-[0.2em] text-gray-900 dark:text-slate-100">
+                        {activeGroup.joinCode}
+                      </span>
+                      <button
+                        onClick={() => copyCode(activeGroup.joinCode)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+                        aria-label={t('sidebar.copyInviteCode')}
+                      >
+                        {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+                      {t('sidebar.shareCode')}
+                      {mLimit !== null && (
+                        <span className="ml-1 text-gray-300 dark:text-slate-600">({memberCount}/{mLimit})</span>
+                      )}
+                    </p>
+                  </>
+                )}
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
-                {t('sidebar.shareCode')}
-              </p>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── Members panel (admin only) ── */}
           {activeGroup && isAdmin && (
@@ -900,6 +942,25 @@ export default function GroupSidebar({
             <User size={15} className="shrink-0" />
             {t('profile.title')}
           </button>
+
+          {subscription.actualTier === 3 && onOpenFeedback && (
+            <button
+              type="button"
+              onClick={() => { onOpenFeedback(); onClose(); }}
+              className={cn(
+                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                isFeedbackPage
+                  ? 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-700 dark:text-fuchsia-300 font-semibold'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-900/20 hover:text-fuchsia-700 dark:hover:text-fuchsia-300',
+              )}
+            >
+              <MessageSquare size={15} className="shrink-0" />
+              Feedback
+              <span className="ml-auto px-1.5 py-px rounded-full text-[9px] font-bold bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white">
+                DEV
+              </span>
+            </button>
+          )}
         </div>
       </aside>
 

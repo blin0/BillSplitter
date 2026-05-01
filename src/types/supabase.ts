@@ -310,6 +310,7 @@ export type Database = {
           show_email: boolean
           stripe_customer_id: string | null
           subscription_status: string | null
+          subscription_tier: number
           venmo_handle: string | null
           zelle_handle: string | null
         }
@@ -328,6 +329,7 @@ export type Database = {
           show_email?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string | null
+          subscription_tier?: number
           venmo_handle?: string | null
           zelle_handle?: string | null
         }
@@ -346,6 +348,7 @@ export type Database = {
           show_email?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string | null
+          subscription_tier?: number
           venmo_handle?: string | null
           zelle_handle?: string | null
         }

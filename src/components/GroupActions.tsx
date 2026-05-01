@@ -2,9 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Plus, Hash, Loader2, Users, Lock, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createGroup, joinGroupByCode, fetchOwnGroupCount, type GroupInfo } from '../lib/db';
-import { useSubscription } from '../hooks/useSubscription';
-
-const FREE_TIER_GROUP_LIMIT = 3;
+import { useSubscriptionContext } from '../context/SubscriptionContext';
+import { groupLimit, nextTierName } from '../lib/hasAccess';
 
 interface Props {
   /** Called after successfully creating a group. */
@@ -17,7 +16,7 @@ interface Props {
 
 export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) {
   const { t } = useTranslation();
-  const subscription = useSubscription();
+  const subscription = useSubscriptionContext();
 
   // ── Create state ───────────────────────────────────────────────────────────
   const [createName,    setCreateName   ] = useState('');
@@ -33,10 +32,11 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
     setBlocked(false);
     setCreateLoading(true);
 
-    // ── Free-tier gate: max 3 owned groups ──────────────────────────────────
-    if (!subscription.isPro) {
+    // ── Tier gate: check owned-group count against tier limit ───────────────
+    const limit = groupLimit(subscription.subscriptionTier);
+    if (limit !== null) {
       const { data: count } = await fetchOwnGroupCount();
-      if ((count ?? 0) >= FREE_TIER_GROUP_LIMIT) {
+      if ((count ?? 0) >= limit) {
         setCreateLoading(false);
         setBlocked(true);
         return;
@@ -101,7 +101,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
                   {t('sidebar.freePlanLimit')}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  {t('sidebar.freePlanDesc', { limit: FREE_TIER_GROUP_LIMIT })}
+                  {t('sidebar.freePlanDesc', { limit: groupLimit(subscription.subscriptionTier) })}
                 </p>
               </div>
             </div>
@@ -111,7 +111,7 @@ export default function GroupActions({ onCreated, onJoined, onUpgrade }: Props) 
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white text-sm font-semibold rounded-xl py-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
             >
               <Sparkles size={13} />
-              {t('sidebar.upgradeProBtn')}
+              Upgrade to {nextTierName(subscription.subscriptionTier)}
             </button>
           </div>
         ) : (

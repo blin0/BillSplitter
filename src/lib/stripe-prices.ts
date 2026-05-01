@@ -7,14 +7,14 @@ export const STRIPE_PRICES = {
   // ── Pro tier ────────────────────────────────────────────────────────────────
   /** $4.99 / month — recurring */
   PRO_MONTHLY:     'price_1TNVMrC9TAB0tHUmoVFlADZc',
-  /** $47.88 / year — recurring */
-  PRO_YEARLY:      'price_1TNVMsC9TAB0tHUmxKRJu7tt',
+  /** $35.88 / year — recurring (40% off monthly) */
+  PRO_YEARLY:      'price_1TRo5hC9TAB0tHUmNIKlfRcv',
 
   // ── Premier tier ────────────────────────────────────────────────────────────
   /** $9.99 / month — recurring */
   PREMIER_MONTHLY: 'price_1TNVMuC9TAB0tHUmbvgTBlyU',
-  /** $95.88 / year — recurring */
-  PREMIER_YEARLY:  'price_1TNVN1C9TAB0tHUmDcVLt4ve',
+  /** $71.88 / year — recurring (40% off monthly) */
+  PREMIER_YEARLY:  'price_1TRo5jC9TAB0tHUmBc6AAdYj',
 
   // ── Legacy aliases (kept for backwards compat with webhook handler) ─────────
   /** @deprecated use PRO_MONTHLY */

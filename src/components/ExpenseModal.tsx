@@ -11,9 +11,13 @@ interface Props {
   onAdd:         (expense: Expense) => void;
   groupId?:      string;
   groupTaxRate?: number | null;
+  limitReached?: boolean;
+  monthlyCount?: number;
+  monthlyLimit?: number | null;
+  onUpgrade?:    () => void;
 }
 
-export default function ExpenseModal({ isOpen, onClose, participants, onAdd, groupId, groupTaxRate }: Props) {
+export default function ExpenseModal({ isOpen, onClose, participants, onAdd, groupId, groupTaxRate, limitReached, monthlyCount, monthlyLimit, onUpgrade }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-focus the first input (description) when the modal opens
@@ -75,6 +79,10 @@ export default function ExpenseModal({ isOpen, onClose, participants, onAdd, gro
           onAdd={handleAdded}
           groupId={groupId}
           groupTaxRate={groupTaxRate}
+          limitReached={limitReached}
+          monthlyCount={monthlyCount}
+          monthlyLimit={monthlyLimit}
+          onUpgrade={onUpgrade}
         />
       </div>
     </div>,

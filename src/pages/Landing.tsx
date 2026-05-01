@@ -1171,7 +1171,7 @@ export default function Landing() {
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
-        className="relative z-10 flex items-center justify-between px-6 md:px-12 py-5 border-b border-white/[0.06]"
+        className="relative z-30 flex items-center justify-between px-6 md:px-12 py-5 border-b border-white/[0.06]"
       >
         <div className="flex items-center gap-2.5">
           <img src="/favicon.svg" alt="" className="w-7 h-7" />

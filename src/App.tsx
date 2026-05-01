@@ -15,6 +15,9 @@ import {
 } from './utils/calculations';
 import { CurrencyProvider, useCurrency, type CurrencyCode, CURRENCIES } from './context/CurrencyContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SubscriptionProvider, useSubscriptionContext } from './context/SubscriptionContext';
+import { expenseLimit } from './lib/hasAccess';
+import FeedbackDashboard from './pages/FeedbackDashboard';
 import ParticipantInput from './components/ParticipantInput';
 import ExpenseForm from './components/ExpenseForm';
 import ExpenseList from './components/ExpenseList';
@@ -34,6 +37,7 @@ import Profile from './pages/Profile';
 import Analytics from './pages/Analytics';
 import Landing from './pages/Landing';
 import ProtectedRoute from './components/ProtectedRoute';
+import ResetPassword from './pages/ResetPassword';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
   fetchUserGroups,
@@ -163,6 +167,7 @@ function AppInner() {
   const { setCurrency } = useCurrency();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const subscription = useSubscriptionContext();
   const location = useLocation();
   const [showSignIn,           setShowSignIn          ] = useState(false);
   const [sidebarOpen,          setSidebarOpen         ] = useState(false);
@@ -180,6 +185,7 @@ function AppInner() {
 
   const isProfilePage   = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname.startsWith('/analytics');
+  const isFeedbackPage  = location.pathname === '/feedback';
 
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
@@ -419,6 +425,19 @@ function AppInner() {
   const dbLoading       = groupsLoading || dataLoading;
   const activeGroupRole = groups.find(g => g.id === activeGroupId)?.role ?? null;
   const isViewer        = activeGroupRole === 'viewer';
+
+  // ── Expense limit gate ────────────────────────────────────────────────────
+  const monthlyExpenseLimit = expenseLimit(subscription.subscriptionTier);
+  const monthlyExpenseCount = (() => {
+    if (monthlyExpenseLimit === null) return 0;
+    const now = new Date();
+    return expenses.filter(e => {
+      if (!e.date) return false;
+      const d = new Date(e.date);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length;
+  })();
+  const expenseLimitReached = monthlyExpenseLimit !== null && monthlyExpenseCount >= monthlyExpenseLimit;
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
@@ -734,6 +753,7 @@ function AppInner() {
           onGroupDeleted={handleGroupDeleted}
           onOpenProfile={() => navigate('/profile')}
           onOpenAnalytics={handleOpenAnalytics}
+          onOpenFeedback={() => navigate('/feedback')}
           onGroupTaxRateChanged={handleGroupTaxRateChanged}
         />
       )}
@@ -880,10 +900,17 @@ function AppInner() {
               <Analytics groups={groups} currentUserId={user?.id ?? null} />
             </ProtectedRoute>
           } />
+
+          {/* Developer feedback dashboard */}
+          <Route path="/feedback" element={
+            <ProtectedRoute>
+              <FeedbackDashboard />
+            </ProtectedRoute>
+          } />
         </Routes>
 
         {/* ── Dashboard content — visible for all non-profile/non-analytics routes ── */}
-        {!isProfilePage && !isAnalyticsPage && (<>
+        {!isProfilePage && !isAnalyticsPage && !isFeedbackPage && (<>
 
           <OfflineBanner />
 
@@ -1049,7 +1076,7 @@ function AppInner() {
                       <>
                         {/* Desktop: inline form */}
                         <div className="hidden lg:block" data-tour="add-expense">
-                          <ExpenseForm participants={participants} onAdd={addExpense} groupId={activeGroupId ?? undefined} groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate} />
+                          <ExpenseForm participants={participants} onAdd={addExpense} groupId={activeGroupId ?? undefined} groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate} limitReached={expenseLimitReached} monthlyCount={monthlyExpenseCount} monthlyLimit={monthlyExpenseLimit} onUpgrade={() => navigate('/profile')} />
                         </div>
                         {/* Mobile: dashed button → modal */}
                         <button
@@ -1136,9 +1163,13 @@ function AppInner() {
         onAdd={addExpense}
         groupId={activeGroupId ?? undefined}
         groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate}
+        limitReached={expenseLimitReached}
+        monthlyCount={monthlyExpenseCount}
+        monthlyLimit={monthlyExpenseLimit}
+        onUpgrade={() => { setShowExpenseModal(false); navigate('/profile'); }}
       />
 
-      {!isProfilePage && <FeedbackButton />}
+      {!isProfilePage && !isFeedbackPage && <FeedbackButton />}
     </div>
   );
 }
@@ -1148,14 +1179,17 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/*" element={
-          <CurrencyProvider>
-            <AppInner />
-          </CurrencyProvider>
-        } />
-      </Routes>
+      <SubscriptionProvider>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/*" element={
+            <CurrencyProvider>
+              <AppInner />
+            </CurrencyProvider>
+          } />
+        </Routes>
+      </SubscriptionProvider>
     </AuthProvider>
   );
 }

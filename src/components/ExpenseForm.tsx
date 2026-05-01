@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { PlusCircle, RefreshCw, ArrowRight, Pencil, Check, X, CheckCircle2, ChevronDown, Percent, Banknote, Minus as MinusIcon, Plus as PlusIcon } from 'lucide-react';
+import { PlusCircle, RefreshCw, ArrowRight, Pencil, Check, X, CheckCircle2, ChevronDown, Percent, Banknote, Minus as MinusIcon, Plus as PlusIcon, Lock, Sparkles } from 'lucide-react';
 import type { Expense, Participant, Split } from '../types';
 import { cn } from '../lib/cn';
 import { round2, round4 } from '../utils/calculations';
@@ -15,6 +15,10 @@ interface Props {
   onAdd:         (expense: Expense) => void;
   groupId?:      string;
   groupTaxRate?: number | null;
+  limitReached?: boolean;
+  monthlyCount?: number;
+  monthlyLimit?: number | null;
+  onUpgrade?:    () => void;
 }
 
 function makeId() {
@@ -62,7 +66,7 @@ function getInheritedTax(
   return { rate: 0, source: null };
 }
 
-export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate }: Props) {
+export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate, limitReached = false, monthlyCount, monthlyLimit, onUpgrade }: Props) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { currency, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
@@ -853,22 +857,41 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
 
         {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
 
-        <button
-          onClick={handleSubmit}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <PlusCircle size={16} />
-          <span className="flex flex-col items-center leading-tight">
-            <span>
-              {sourceSubtotal > 0
-                ? t('expense.addExpenseWithAmount', { amount: sourceSubtotal.toFixed(2), currency: sourceCurrency })
-                : t('expense.addExpense')}
+        {limitReached ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+              <Lock size={13} className="text-amber-500 shrink-0" />
+              <p className="text-xs text-amber-700 dark:text-amber-400 leading-snug">
+                Monthly limit reached ({monthlyCount}/{monthlyLimit} expenses).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onUpgrade}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+            >
+              <Sparkles size={15} />
+              Upgrade to Pro — Unlimited Expenses
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <PlusCircle size={16} />
+            <span className="flex flex-col items-center leading-tight">
+              <span>
+                {sourceSubtotal > 0
+                  ? t('expense.addExpenseWithAmount', { amount: sourceSubtotal.toFixed(2), currency: sourceCurrency })
+                  : t('expense.addExpense')}
+              </span>
+              {isForeign && grandTotalBase > 0 && (
+                <span className="text-[11px] font-normal opacity-75">≈ {formatPrice(grandTotalBase)}</span>
+              )}
             </span>
-            {isForeign && grandTotalBase > 0 && (
-              <span className="text-[11px] font-normal opacity-75">≈ {formatPrice(grandTotalBase)}</span>
-            )}
-          </span>
-        </button>
+          </button>
+        )}
       </div>
     </div>
   );
