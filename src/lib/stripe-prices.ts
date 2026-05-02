@@ -6,19 +6,19 @@
 export const STRIPE_PRICES = {
   // ── Pro tier ────────────────────────────────────────────────────────────────
   /** $4.99 / month — recurring */
-  PRO_MONTHLY:     'price_1TNVMrC9TAB0tHUmoVFlADZc',
+  PRO_MONTHLY:     'price_1TSV41FdEYlqHe8qeRw4ilUF',
   /** $35.88 / year — recurring (40% off monthly) */
-  PRO_YEARLY:      'price_1TRo5hC9TAB0tHUmNIKlfRcv',
+  PRO_YEARLY:      'price_1TSV41FdEYlqHe8qSLEOTF2D',
 
   // ── Premier tier ────────────────────────────────────────────────────────────
   /** $9.99 / month — recurring */
-  PREMIER_MONTHLY: 'price_1TNVMuC9TAB0tHUmbvgTBlyU',
+  PREMIER_MONTHLY: 'price_1TSV4IFdEYlqHe8qSewtUrQ4',
   /** $71.88 / year — recurring (40% off monthly) */
-  PREMIER_YEARLY:  'price_1TRo5jC9TAB0tHUmBc6AAdYj',
+  PREMIER_YEARLY:  'price_1TSV4IFdEYlqHe8qeaie9laP',
 
   // ── Legacy aliases (kept for backwards compat with webhook handler) ─────────
   /** @deprecated use PRO_MONTHLY */
-  PLUS_MONTHLY: 'price_1TNVMrC9TAB0tHUmoVFlADZc',
+  PLUS_MONTHLY: 'price_1TSV41FdEYlqHe8qeRw4ilUF',
   /** $49.00 — one-time lifetime purchase */
   LIFETIME:     'price_1TMtrYC9TAB0tHUmEzwElXdA',
 } as const;
