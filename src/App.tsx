@@ -50,6 +50,9 @@ import {
   syncSplitsForExpense,
   logActivity,
   fetchOwnProfile,
+  fetchMemberLink,
+  setMemberLink,
+  deleteMemberLink,
   type GroupInfo,
 } from './lib/db';
 
@@ -215,6 +218,8 @@ function AppInner() {
   const [removedNotice,  setRemovedNotice ] = useState<string | null>(null);
   const [joinNotices,    setJoinNotices   ] = useState<{ id: string; text: string }[]>([]);
   const [roleNotices,    setRoleNotices   ] = useState<{ id: string; text: string; promoted: boolean }[]>([]);
+  // Identity: which named_participant the current user has claimed as "me" in the active group
+  const [linkedMemberId, setLinkedMemberId] = useState<string | null>(null);
 
   // Realtime sync — keep all group members in lockstep
   useGroupSync(
@@ -393,11 +398,12 @@ function AppInner() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, activeGroupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load participants + expenses when active group changes
+  // Load participants + expenses + identity link when active group changes
   useEffect(() => {
     if (!activeGroupId) {
       setDbParticipants([]);
       setDbExpenses([]);
+      setLinkedMemberId(null);
       return;
     }
 
@@ -407,10 +413,12 @@ function AppInner() {
     Promise.all([
       fetchParticipants(activeGroupId),
       fetchExpenses(activeGroupId),
-    ]).then(([pResult, eResult]) => {
+      fetchMemberLink(activeGroupId),
+    ]).then(([pResult, eResult, linkResult]) => {
       if (cancelled) return;
-      if (pResult.data) setDbParticipants(pResult.data);
-      if (eResult.data) setDbExpenses(eResult.data);
+      if (pResult.data)    setDbParticipants(pResult.data);
+      if (eResult.data)    setDbExpenses(eResult.data);
+      setLinkedMemberId(linkResult.data ?? null);
       setDataLoading(false);
     });
 
@@ -469,6 +477,20 @@ function AppInner() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isProfilePage, isSignedIn, isViewer, groupsLoading, groups, showExpenseModal, showSignIn, setExpenses]);
+
+  // ── Identity link handlers ─────────────────────────────────────────────────
+
+  async function handleLink(memberId: string) {
+    if (!activeGroupId) return;
+    const { error } = await setMemberLink(activeGroupId, memberId);
+    if (!error) setLinkedMemberId(memberId);
+  }
+
+  async function handleUnlink() {
+    if (!activeGroupId) return;
+    const { error } = await deleteMemberLink(activeGroupId);
+    if (!error) setLinkedMemberId(null);
+  }
 
   // ── Group management ───────────────────────────────────────────────────────
 
@@ -1043,6 +1065,10 @@ function AppInner() {
                       onAdd={addParticipant}
                       onRemove={removeParticipant}
                       readOnly={isSignedIn && isViewer}
+                      linkedMemberId={linkedMemberId}
+                      onLink={handleLink}
+                      onUnlink={handleUnlink}
+                      identityEnabled={isSignedIn}
                     />
                   </div>
                   <div className="order-2">

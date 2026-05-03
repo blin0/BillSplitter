@@ -784,6 +784,284 @@ export async function syncSplitsForExpense(
   return { data: null, error: firstError?.message ?? null };
 }
 
+// ─── User–member identity links ───────────────────────────────────────────────
+
+/**
+ * Returns the named_participant id that the current user has claimed as "me"
+ * in the given group, or null if no link exists yet.
+ */
+export async function fetchMemberLink(groupId: string): Promise<DbResult<string | null>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: null };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from('user_member_links')
+    .select('member_id')
+    .eq('user_id', user.id)
+    .eq('group_id', groupId)
+    .maybeSingle();
+
+  if (error) return { data: null, error: error.message };
+  return { data: (data as { member_id: string } | null)?.member_id ?? null, error: null };
+}
+
+/**
+ * Upsert: link the current user to a named_participant in a group.
+ * Replaces any existing link (unique constraint on user_id + group_id).
+ */
+export async function setMemberLink(groupId: string, memberId: string): Promise<DbResult<void>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: 'Not authenticated' };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('user_member_links')
+    .upsert(
+      { user_id: user.id, group_id: groupId, member_id: memberId },
+      { onConflict: 'user_id,group_id' },
+    );
+
+  return { data: null, error: error?.message ?? null };
+}
+
+/** Remove the current user's identity link for a group (unlinking). */
+export async function deleteMemberLink(groupId: string): Promise<DbResult<void>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: 'Not authenticated' };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('user_member_links')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('group_id', groupId);
+
+  return { data: null, error: error?.message ?? null };
+}
+
+/**
+ * Fetch all expenses across all groups where the current user's linked member
+ * appears in the splits. Used by the personal analytics view.
+ */
+export interface PersonalExpense {
+  groupId:     string;
+  groupName:   string;
+  memberId:    string;
+  memberName:  string;
+  expense:     Expense;
+}
+
+export interface PersonalData {
+  items:            PersonalExpense[];
+  /** Maps named_participant.id → name for every participant in all linked groups. */
+  participantNames: Record<string, string>;
+}
+
+export async function fetchPersonalExpenses(): Promise<DbResult<PersonalData>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: { items: [], participantNames: {} }, error: null };
+
+  // Fetch all links for the current user
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rawLinks, error: linksErr } = await (supabase as any)
+    .from('user_member_links')
+    .select('group_id, member_id')
+    .eq('user_id', user.id);
+
+  if (linksErr) return { data: null, error: linksErr.message };
+  const links = (rawLinks ?? []) as { group_id: string; member_id: string }[];
+  if (links.length === 0) return { data: { items: [], participantNames: {} }, error: null };
+
+  const groupIds  = links.map(l => l.group_id);
+  const memberIds = links.map(l => l.member_id);
+
+  // Fetch group names
+  const { data: groupRows, error: groupErr } = await supabase
+    .from('groups')
+    .select('id, name')
+    .in('id', groupIds);
+  if (groupErr) return { data: null, error: groupErr.message };
+  const groupNameMap = new Map((groupRows ?? []).map(g => [g.id, g.name]));
+
+  // Fetch ALL named_participants for all linked groups (needed for debt-flow peer name resolution)
+  const { data: memberRows, error: memberErr } = await supabase
+    .from('named_participants')
+    .select('id, name, group_id')
+    .in('group_id', groupIds);
+  if (memberErr) return { data: null, error: memberErr.message };
+
+  // participantNames: id → name (across all linked groups, used in the UI)
+  const participantNames: Record<string, string> = {};
+  for (const m of memberRows ?? []) participantNames[m.id] = m.name;
+
+  // memberNameMap: only the "me" participants (subset of participantNames)
+  const memberNameMap = new Map(
+    (memberRows ?? []).filter(m => memberIds.includes(m.id)).map(m => [m.id, m.name])
+  );
+
+  // Build link lookup: group_id → member_id
+  const linkMap = new Map(links.map(l => [l.group_id, l.member_id]));
+
+  // Fetch all expenses for those groups, then filter to those involving the linked member
+  const results: PersonalExpense[] = [];
+  for (const groupId of groupIds) {
+    const memberId = linkMap.get(groupId)!;
+    const { data: expRows, error: expErr } = await supabase
+      .from('expenses')
+      .select(`
+        id, description, total_amount, payer_participant_id, metadata, created_at,
+        splits ( id, participant_id, amount_owed, paid_amount, is_paid )
+      `)
+      .eq('group_id', groupId)
+      .order('created_at');
+
+    if (expErr) continue;
+
+    type SplitRow = { id: string; participant_id: string | null; amount_owed: number; paid_amount: number; is_paid: boolean | null };
+    for (const row of expRows ?? []) {
+      const meta = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+      const payer = row.payer_participant_id ?? '';
+      const rawSplits = (row.splits as unknown as SplitRow[]) ?? [];
+
+      // Only include expenses where the linked member has a split
+      if (!rawSplits.some(s => s.participant_id === memberId)) continue;
+
+      const splits: Split[] = rawSplits.map(s => {
+        const isPayer = (s.participant_id ?? '') === payer;
+        return {
+          participantId: s.participant_id ?? '',
+          share:         Number(s.amount_owed),
+          paidAmount:    isPayer ? Number(s.amount_owed) : Number(s.paid_amount ?? 0),
+          isSettled:     isPayer ? true                  : (s.is_paid ?? false),
+        };
+      });
+
+      results.push({
+        groupId,
+        groupName:  groupNameMap.get(groupId)  ?? groupId,
+        memberId,
+        memberName: memberNameMap.get(memberId) ?? memberId,
+        expense: {
+          id:                   row.id,
+          description:          row.description,
+          totalAmount:          Number(row.total_amount),
+          sourceAmount:         meta.sourceAmount         ?? Number(row.total_amount),
+          sourceCurrency:       meta.sourceCurrency        ?? 'USD',
+          lockedRate:           meta.lockedRate            ?? 1,
+          paidBy:               row.payer_participant_id  ?? '',
+          splitType:            meta.splitType             ?? 'equally',
+          involvedParticipants: meta.involvedParticipants  ?? splits.map(s => s.participantId),
+          splits,
+          isHighlighted:        false,
+          taxPercent:           meta.taxPercent,
+          tipSourceAmount:      meta.tipSourceAmount,
+          date:                 row.created_at as string | undefined,
+        },
+      });
+    }
+  }
+
+  return { data: { items: results, participantNames }, error: null };
+}
+
+/**
+ * Fetch personal expenses for a single calendar month, bounded by local-timezone
+ * midnight so the calendar keys (derived from getDate/getMonth) stay consistent
+ * with what the user sees in their timezone.
+ */
+export async function fetchPersonalCalendarMonth(year: number, month: number): Promise<DbResult<PersonalExpense[]>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: [], error: null };
+
+  // Local-timezone month boundaries → converted to UTC for the Supabase filter
+  const startUtc = new Date(year, month, 1).toISOString();
+  const endUtc   = new Date(year, month + 1, 1).toISOString();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rawLinks, error: linksErr } = await (supabase as any)
+    .from('user_member_links')
+    .select('group_id, member_id')
+    .eq('user_id', user.id);
+
+  if (linksErr) return { data: null, error: linksErr.message };
+  const links = (rawLinks ?? []) as { group_id: string; member_id: string }[];
+  if (links.length === 0) return { data: [], error: null };
+
+  const groupIds  = links.map(l => l.group_id);
+  const memberIds = links.map(l => l.member_id);
+  const linkMap   = new Map(links.map(l => [l.group_id, l.member_id]));
+
+  const { data: groupRows } = await supabase.from('groups').select('id, name').in('id', groupIds);
+  const groupNameMap = new Map((groupRows ?? []).map(g => [g.id, g.name]));
+
+  const { data: memberRows } = await supabase
+    .from('named_participants').select('id, name').in('id', memberIds);
+  const memberNameMap = new Map((memberRows ?? []).map(m => [m.id, m.name]));
+
+  const results: PersonalExpense[] = [];
+
+  for (const groupId of groupIds) {
+    const memberId = linkMap.get(groupId)!;
+    const { data: expRows, error: expErr } = await supabase
+      .from('expenses')
+      .select(`
+        id, description, total_amount, payer_participant_id, metadata, created_at,
+        splits ( id, participant_id, amount_owed, paid_amount, is_paid )
+      `)
+      .eq('group_id', groupId)
+      .gte('created_at', startUtc)
+      .lt('created_at', endUtc)
+      .order('created_at');
+
+    if (expErr) continue;
+
+    type SplitRow = { id: string; participant_id: string | null; amount_owed: number; paid_amount: number; is_paid: boolean | null };
+    for (const row of expRows ?? []) {
+      const meta      = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+      const payer     = row.payer_participant_id ?? '';
+      const rawSplits = (row.splits as unknown as SplitRow[]) ?? [];
+
+      if (!rawSplits.some(s => s.participant_id === memberId)) continue;
+
+      const splits: Split[] = rawSplits.map(s => {
+        const isPayer = (s.participant_id ?? '') === payer;
+        return {
+          participantId: s.participant_id ?? '',
+          share:         Number(s.amount_owed),
+          paidAmount:    isPayer ? Number(s.amount_owed) : Number(s.paid_amount ?? 0),
+          isSettled:     isPayer ? true                  : (s.is_paid ?? false),
+        };
+      });
+
+      results.push({
+        groupId,
+        groupName:  groupNameMap.get(groupId)  ?? groupId,
+        memberId,
+        memberName: memberNameMap.get(memberId) ?? memberId,
+        expense: {
+          id:                   row.id,
+          description:          row.description,
+          totalAmount:          Number(row.total_amount),
+          sourceAmount:         meta.sourceAmount         ?? Number(row.total_amount),
+          sourceCurrency:       meta.sourceCurrency        ?? 'USD',
+          lockedRate:           meta.lockedRate            ?? 1,
+          paidBy:               row.payer_participant_id  ?? '',
+          splitType:            meta.splitType             ?? 'equally',
+          involvedParticipants: meta.involvedParticipants  ?? splits.map(s => s.participantId),
+          splits,
+          isHighlighted:        false,
+          taxPercent:           meta.taxPercent,
+          tipSourceAmount:      meta.tipSourceAmount,
+          date:                 row.created_at as string | undefined,
+        },
+      });
+    }
+  }
+
+  return { data: results, error: null };
+}
+
 // ─── Feedback ─────────────────────────────────────────────────────────────────
 
 export interface FeedbackPayload {

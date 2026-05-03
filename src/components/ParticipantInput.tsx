@@ -1,21 +1,40 @@
 import { useState } from 'react';
-import { UserPlus, X, Lock } from 'lucide-react';
+import { UserPlus, X, Lock, UserCheck, Link2, Link2Off } from 'lucide-react';
 import type { Participant } from '../types';
 import { cn } from '../lib/cn';
 import { round2 } from '../utils/calculations';
 import { useTranslation } from 'react-i18next';
 
 interface Props {
-  participants: Participant[];
-  balances: Record<string, number>;
-  onAdd: (name: string) => void;
-  onRemove: (id: string) => void;
+  participants:   Participant[];
+  balances:       Record<string, number>;
+  onAdd:          (name: string) => void;
+  onRemove:       (id: string) => void;
   /** When true, hides add/remove controls (viewer role). */
-  readOnly?: boolean;
+  readOnly?:      boolean;
+  /** ID of the named_participant the current user has claimed as "me". */
+  linkedMemberId?: string | null;
+  /** Called with the participant id the user wants to link as themselves. */
+  onLink?:        (memberId: string) => void;
+  /** Called to remove the current user's identity link for this group. */
+  onUnlink?:      () => void;
+  /** When false, the "This is me" feature is unavailable (guest mode). */
+  identityEnabled?: boolean;
 }
 
-export default function ParticipantInput({ participants, balances, onAdd, onRemove, readOnly = false }: Props) {
+export default function ParticipantInput({
+  participants,
+  balances,
+  onAdd,
+  onRemove,
+  readOnly = false,
+  linkedMemberId = null,
+  onLink,
+  onUnlink,
+  identityEnabled = false,
+}: Props) {
   const [input, setInput] = useState('');
+  const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
   const { t } = useTranslation();
 
   function handleAdd() {
@@ -25,6 +44,14 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
     onAdd(name);
     setInput('');
   }
+
+  function confirmLink() {
+    if (!pendingLinkId || !onLink) return;
+    onLink(pendingLinkId);
+    setPendingLinkId(null);
+  }
+
+  const pendingName = participants.find(p => p.id === pendingLinkId)?.name ?? '';
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
@@ -57,15 +84,45 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
         <div className="flex flex-wrap gap-2">
           {participants.map(p => {
             // round2 prevents floating-point residuals (e.g. 0.0000001) from blocking deletion
-            const balance = round2(balances[p.id] ?? 0);
-            const locked  = Math.abs(balance) > 0.01;
+            const balance   = round2(balances[p.id] ?? 0);
+            const locked    = Math.abs(balance) > 0.01;
+            const isLinked  = identityEnabled && linkedMemberId === p.id;
 
             return (
               <span
                 key={p.id}
-                className="inline-flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-100 dark:border-violet-900/50 text-sm font-medium px-3 py-1.5 rounded-full"
+                className={cn(
+                  'inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border',
+                  isLinked
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                    : 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-100 dark:border-violet-900/50',
+                )}
               >
+                {isLinked && <UserCheck size={12} className="shrink-0" />}
                 {p.name}
+
+                {/* ── "This is me" / "Unlink" button (identity feature) ── */}
+                {identityEnabled && (
+                  isLinked ? (
+                    <button
+                      onClick={() => onUnlink?.()}
+                      title="Unlink your identity from this member"
+                      className="hover:text-emerald-900 dark:hover:text-emerald-100 transition-all hover:scale-110 active:scale-90"
+                      aria-label={`Unlink ${p.name}`}
+                    >
+                      <Link2Off size={12} />
+                    </button>
+                  ) : linkedMemberId == null ? (
+                    <button
+                      onClick={() => setPendingLinkId(p.id)}
+                      title="This is me"
+                      className="opacity-40 hover:opacity-100 transition-all hover:scale-110 active:scale-90"
+                      aria-label={`Identify as ${p.name}`}
+                    >
+                      <Link2 size={12} />
+                    </button>
+                  ) : null
+                )}
 
                 {!readOnly && (locked ? (
                   /* ── Locked state: icon + tooltip ── */
@@ -103,6 +160,41 @@ export default function ParticipantInput({ participants, balances, onAdd, onRemo
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Confirm-link modal ── */}
+      {pendingLinkId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+                <UserCheck size={18} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+                Identify as {pendingName}?
+              </h3>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-6">
+              Linking this member will aggregate their spending into your{' '}
+              <span className="font-medium text-gray-700 dark:text-slate-300">Personal Analytics</span>.
+              You can only link one person per group. You can unlink at any time.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingLinkId(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLink}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-all hover:scale-105 active:scale-95"
+              >
+                Yes, this is me
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
