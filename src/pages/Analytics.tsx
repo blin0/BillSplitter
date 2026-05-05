@@ -1206,12 +1206,11 @@ function getPersonalSavingsData(items: PersonalExpense[]) {
   };
 }
 
-// item.expense.date is a full ISO UTC string; use local-timezone getters for the calendar key
 function getPersonalCalendarData(items: PersonalExpense[]): Map<string, { total: number; list: PersonalExpense[] }> {
   const map = new Map<string, { total: number; list: PersonalExpense[] }>();
   for (const item of items) {
     if (!item.expense.date) continue;
-    const d = new Date(item.expense.date); // parse UTC; getDate/Month/FullYear use local TZ
+    const d = new Date(item.expense.date);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const myShare = item.expense.splits.find(s => s.participantId === item.memberId)?.share ?? 0;
     const entry = map.get(key) ?? { total: 0, list: [] };
@@ -1223,7 +1222,7 @@ function getPersonalCalendarData(items: PersonalExpense[]): Map<string, { total:
 }
 
 function buildCalendarDays(year: number, month: number): (number | null)[] {
-  const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (number | null)[] = Array(firstDow).fill(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -1245,7 +1244,7 @@ function fmtCellAmt(n: number): string {
 }
 
 function getPersonalDebtFlow(items: PersonalExpense[], participantNames: Record<string, string>) {
-  const net = new Map<string, number>(); // peer name → net (+ = they owe me, − = I owe them)
+  const net = new Map<string, number>();
   for (const { expense, memberId } of items) {
     if (expense.paidBy === memberId) {
       for (const split of expense.splits) {
@@ -1296,7 +1295,6 @@ function PersonalDonutWidget({ items, fmt, loading }: PersonalCardProps) {
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -top-10 -left-10 w-44 h-44 rounded-full bg-violet-600/12 blur-3xl" />
-
       <div className="flex items-center gap-2 mb-5">
         <div className="p-1.5 rounded-lg bg-violet-500/20 shrink-0">
           <BarChart3 size={13} className="text-violet-500 dark:text-violet-400" />
@@ -1304,7 +1302,6 @@ function PersonalDonutWidget({ items, fmt, loading }: PersonalCardProps) {
         <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1">Personal Spending</span>
         <InsightBadge insight={insight} />
       </div>
-
       {loading ? <DonutSkeleton /> : cats.length === 0 ? (
         <div className="flex items-center justify-center" style={{ height: 280 }}>
           <p className="text-gray-400 dark:text-slate-500 text-sm text-center">No personal expenses yet</p>
@@ -1364,7 +1361,6 @@ function PersonalDonutWidget({ items, fmt, loading }: PersonalCardProps) {
               </div>
             </div>
           </motion.div>
-
           <div className="flex-grow mt-4 space-y-1">
             {cats.map((c, i) => (
               <div key={c.category}
@@ -1398,9 +1394,8 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
   const creditors = flow.filter(r => r.amount > 0);
   const debtors   = flow.filter(r => r.amount < 0);
   const visible   = showAll ? flow : flow.slice(0, 6);
-
-  const netTotal = round2(flow.reduce((s, r) => s + r.amount, 0));
-  const insight  = flow.length === 0
+  const netTotal  = round2(flow.reduce((s, r) => s + r.amount, 0));
+  const insight   = flow.length === 0
     ? 'All settled up across all your groups!'
     : netTotal > 0
     ? `You are net owed ${fmt(netTotal)} across ${creditors.length} relationship${creditors.length !== 1 ? 's' : ''}.`
@@ -1412,7 +1407,6 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full bg-indigo-500/10 blur-3xl" />
-
       <div className="flex items-center gap-2">
         <div className="p-1.5 rounded-lg bg-indigo-500/20 shrink-0">
           <Users size={13} className="text-indigo-600 dark:text-indigo-400" />
@@ -1420,7 +1414,6 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
         <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1">Net Debt Flow</span>
         <InsightBadge insight={insight} />
       </div>
-
       {loading ? <PeerBarSkeleton /> : flow.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
           <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
@@ -1431,13 +1424,10 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
         </div>
       ) : (
         <>
-          {/* ── Legend ── */}
           <div className="flex items-center gap-4 text-[10px] text-gray-400 dark:text-slate-500">
             <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500" />I owe</div>
             <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" />Owe me</div>
           </div>
-
-          {/* ── Bars ── */}
           <div className="flex flex-col gap-3">
             {visible.map(({ name, amount }) => {
               const isCredit = amount >= 0;
@@ -1473,7 +1463,6 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
               );
             })}
           </div>
-
           {flow.length > 6 && (
             <button type="button" onClick={() => setShowAll(s => !s)}
               className="text-[11px] text-violet-500 dark:text-violet-400 hover:underline self-start"
@@ -1481,8 +1470,6 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
               {showAll ? 'Show less' : `+${flow.length - 6} more`}
             </button>
           )}
-
-          {/* ── Net summary pill ── */}
           <div className="pt-3 mt-auto border-t" style={{ borderColor: 'var(--analytics-divider)' }}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider">Net position</span>
@@ -1503,7 +1490,6 @@ function PersonalDebtFlowWidget({ items, fmt, loading, participantNames }: Perso
 
 function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
   const s = useMemo(() => getPersonalSavingsData(items), [items]);
-
   const byGroup = useMemo(() => {
     const map = new Map<string, { name: string; amount: number }>();
     for (const item of items) {
@@ -1514,7 +1500,6 @@ function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
     }
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }, [items]);
-
   const maxGroup = byGroup[0]?.amount ?? 1;
 
   return (
@@ -1523,14 +1508,12 @@ function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -bottom-8 -right-8 w-36 h-36 rounded-full bg-emerald-500/8 blur-3xl" />
-
       <div className="flex items-center gap-2">
         <div className="p-1.5 rounded-lg bg-emerald-500/20 shrink-0">
           <Receipt size={13} className="text-emerald-600 dark:text-emerald-400" />
         </div>
         <span className="text-sm font-semibold text-gray-900 dark:text-white">Aggregated Totals</span>
       </div>
-
       {loading ? (
         <div className="space-y-2"><Shimmer className="h-10" /><Shimmer className="h-7" /><Shimmer className="h-7" /></div>
       ) : items.length === 0 ? (
@@ -1539,7 +1522,6 @@ function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
         </div>
       ) : (
         <>
-          {/* ── Grand total ── */}
           <div>
             <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-0.5">Total Personal Spend</p>
             <div className="flex items-end gap-1.5">
@@ -1549,8 +1531,6 @@ function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
               across {items.length} expense{items.length !== 1 ? 's' : ''} in {byGroup.length} group{byGroup.length !== 1 ? 's' : ''}
             </p>
           </div>
-
-          {/* ── Tax / Tip breakdown ── */}
           {s.combined > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'var(--analytics-sub-row)' }}>
@@ -1575,8 +1555,6 @@ function PersonalTotalsWidget({ items, fmt, loading }: PersonalCardProps) {
               </div>
             </div>
           )}
-
-          {/* ── Per-group breakdown ── */}
           {byGroup.length > 0 && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2">By Group</p>
@@ -1618,77 +1596,45 @@ interface PersonalCalendarProps {
 
 function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalendarProps) {
   const isDark = useIsDark();
-
   const today    = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-
   const [calDate,    setCalDate   ] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
   const [monthItems, setMonthItems] = useState<PersonalExpense[]>([]);
   const [monthLoading, setMonthLoading] = useState(true);
   const pickerRef = useRef<HTMLDivElement>(null);
-
   const year  = calDate.getFullYear();
   const month = calDate.getMonth();
 
-  // Fetch month-specific data whenever the displayed month changes
   useEffect(() => {
     let cancelled = false;
     setMonthLoading(true);
     fetchPersonalCalendarMonth(year, month).then(({ data }) => {
-      if (!cancelled) {
-        setMonthItems(data ?? []);
-        setMonthLoading(false);
-      }
+      if (!cancelled) { setMonthItems(data ?? []); setMonthLoading(false); }
     });
     return () => { cancelled = true; };
   }, [year, month]);
 
-  const calData = useMemo(() => getPersonalCalendarData(monthItems), [monthItems]);
+  const calData    = useMemo(() => getPersonalCalendarData(monthItems), [monthItems]);
+  const cells      = useMemo(() => buildCalendarDays(year, month), [year, month]);
+  const maxDay     = useMemo(() => { let m = 0; calData.forEach(v => { if (v.total > m) m = v.total; }); return m; }, [calData]);
+  const monthTotal = useMemo(() => { let t = 0; calData.forEach(v => { t = round2(t + v.total); }); return t; }, [calData]);
+  const dayKey = (d: number) => `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
-  const cells = useMemo(() => buildCalendarDays(year, month), [year, month]);
-
-  const maxDay = useMemo(() => {
-    let m = 0;
-    calData.forEach(v => { if (v.total > m) m = v.total; });
-    return m;
-  }, [calData]);
-
-  const monthTotal = useMemo(() => {
-    let t = 0;
-    calData.forEach(v => { t = round2(t + v.total); });
-    return t;
-  }, [calData]);
-
-  const dayKey = (d: number) =>
-    `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-
-  function prevMonth() {
-    setCalDate(new Date(year, month - 1, 1));
-    onSelectDay(null);
-  }
+  function prevMonth() { setCalDate(new Date(year, month - 1, 1)); onSelectDay(null); }
   function nextMonth() {
     const next = new Date(year, month + 1, 1);
     if (next > new Date(today.getFullYear(), today.getMonth(), 1)) return;
-    setCalDate(next);
-    onSelectDay(null);
+    setCalDate(next); onSelectDay(null);
   }
-  function goToMonth(y: number, m: number) {
-    setCalDate(new Date(y, m, 1));
-    onSelectDay(null);
-    setPickerOpen(false);
-  }
-
+  function goToMonth(y: number, m: number) { setCalDate(new Date(y, m, 1)); onSelectDay(null); setPickerOpen(false); }
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
-  // close picker on outside click
   useEffect(() => {
     if (!pickerOpen) return;
     function handler(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -1702,8 +1648,6 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
       style={{ background: 'var(--analytics-card-bg)', borderColor: 'var(--analytics-card-border)' }}
     >
       <div className="pointer-events-none absolute -bottom-10 right-1/4 w-64 h-20 bg-violet-600/8 blur-3xl" />
-
-      {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className="p-1.5 rounded-lg bg-violet-500/20 shrink-0">
           <Calendar size={13} className="text-violet-500 dark:text-violet-400" />
@@ -1714,14 +1658,10 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
             <span className="text-xs font-bold text-violet-600 dark:text-violet-300">{fmt(monthTotal)}</span>
           )}
         </div>
-
-        {/* Month/year navigator */}
         <div className="ml-auto flex items-center gap-1">
           <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors text-gray-400 dark:text-slate-500">
             <ChevronLeft size={14} />
           </button>
-
-          {/* Month+year label — click opens picker */}
           <div className="relative" ref={pickerRef}>
             <button
               onClick={() => { setPickerOpen(o => !o); setPickerYear(year); }}
@@ -1729,50 +1669,27 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
             >
               {CAL_MONTHS[month]} {year}
             </button>
-
             <AnimatePresence>
               {pickerOpen && (
-                <motion.div
-                  key="picker"
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                  animate={{ opacity: 1, scale: 1,    y: 0   }}
-                  exit={{   opacity: 0, scale: 0.95, y: -4   }}
+                <motion.div key="picker"
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }}
                   transition={{ duration: 0.15 }}
                   className="absolute top-full mt-1.5 right-0 z-40 rounded-xl shadow-2xl border p-3 w-48"
                   style={{ background: 'var(--analytics-tooltip-bg)', borderColor: 'var(--analytics-tooltip-border)' }}
                 >
-                  {/* Year nav */}
                   <div className="flex items-center justify-between mb-2">
-                    <button onClick={() => setPickerYear(y => y - 1)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400">
-                      <ChevronLeft size={12} />
-                    </button>
+                    <button onClick={() => setPickerYear(y => y - 1)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400"><ChevronLeft size={12} /></button>
                     <span className="text-xs font-bold text-gray-700 dark:text-slate-200">{pickerYear}</span>
-                    <button
-                      onClick={() => setPickerYear(y => y + 1)}
-                      disabled={pickerYear >= today.getFullYear()}
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 disabled:opacity-30"
-                    >
-                      <ChevronRight size={12} />
-                    </button>
+                    <button onClick={() => setPickerYear(y => y + 1)} disabled={pickerYear >= today.getFullYear()} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 disabled:opacity-30"><ChevronRight size={12} /></button>
                   </div>
-                  {/* Month grid */}
                   <div className="grid grid-cols-3 gap-1">
                     {CAL_MONTHS.map((m, mi) => {
-                      const isFuture = pickerYear > today.getFullYear() ||
-                        (pickerYear === today.getFullYear() && mi > today.getMonth());
+                      const isFuture = pickerYear > today.getFullYear() || (pickerYear === today.getFullYear() && mi > today.getMonth());
                       const isActive = pickerYear === year && mi === month;
                       return (
-                        <button
-                          key={m}
-                          disabled={isFuture}
-                          onClick={() => goToMonth(pickerYear, mi)}
-                          className={cn(
-                            'text-[10px] font-medium py-1 rounded-lg transition-colors',
-                            isActive
-                              ? 'bg-violet-600 text-white'
-                              : isFuture
-                                ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed'
-                                : 'text-gray-600 dark:text-slate-300 hover:bg-violet-500/15',
+                        <button key={m} disabled={isFuture} onClick={() => goToMonth(pickerYear, mi)}
+                          className={cn('text-[10px] font-medium py-1 rounded-lg transition-colors',
+                            isActive ? 'bg-violet-600 text-white' : isFuture ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed' : 'text-gray-600 dark:text-slate-300 hover:bg-violet-500/15',
                           )}
                         >{m}</button>
                       );
@@ -1782,27 +1699,18 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
               )}
             </AnimatePresence>
           </div>
-
-          <button
-            onClick={nextMonth}
-            disabled={isCurrentMonth}
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors text-gray-400 dark:text-slate-500 disabled:opacity-25"
-          >
+          <button onClick={nextMonth} disabled={isCurrentMonth} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors text-gray-400 dark:text-slate-500 disabled:opacity-25">
             <ChevronRight size={14} />
           </button>
         </div>
       </div>
-
       {monthLoading ? <LineSkeleton /> : (
         <>
-          {/* Day-of-week headers */}
           <div className="grid grid-cols-7 mb-1">
             {CAL_DOW.map(d => (
               <div key={d} className="text-center text-[9px] font-semibold text-gray-400 dark:text-slate-600 py-1">{d}</div>
             ))}
           </div>
-
-          {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-0.5">
             {cells.map((d, i) => {
               if (d === null) return <div key={`e${i}`} />;
@@ -1812,33 +1720,20 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
               const isSel   = key === selectedDay;
               const heat    = entry ? getCellHeat(entry.total, maxDay, isDark) : {};
               return (
-                <button
-                  key={key}
-                  onClick={() => onSelectDay(isSel ? null : key)}
-                  className={cn(
-                    'relative flex flex-col items-center justify-start rounded-lg transition-all cursor-pointer',
-                    'pt-1 pb-1 min-h-[42px]',
-                    isSel  ? 'ring-2 ring-violet-500 ring-offset-0' : '',
+                <button key={key} onClick={() => onSelectDay(isSel ? null : key)}
+                  className={cn('relative flex flex-col items-center justify-start rounded-lg transition-all cursor-pointer pt-1 pb-1 min-h-[42px]',
+                    isSel ? 'ring-2 ring-violet-500 ring-offset-0' : '',
                     isToday && !isSel ? 'ring-1.5' : '',
                     !entry ? 'hover:bg-gray-50 dark:hover:bg-slate-800/50' : 'hover:brightness-110',
                   )}
-                  style={{
-                    ...heat,
-                    ...(isToday && !isSel ? { boxShadow: '0 0 0 1.5px rgba(251,191,36,0.7)' } : {}),
-                  }}
+                  style={{ ...heat, ...(isToday && !isSel ? { boxShadow: '0 0 0 1.5px rgba(251,191,36,0.7)' } : {}) }}
                 >
-                  <span className={cn(
-                    'text-[10px] font-medium leading-none',
+                  <span className={cn('text-[10px] font-medium leading-none',
                     isToday ? 'text-amber-500 dark:text-amber-400' : entry ? 'text-violet-100 dark:text-violet-200' : 'text-gray-400 dark:text-slate-600',
                     entry && !isDark ? 'text-violet-900' : '',
-                  )}>
-                    {d}
-                  </span>
+                  )}>{d}</span>
                   {entry && (
-                    <span className={cn(
-                      'text-[8px] font-bold leading-none mt-0.5',
-                      isDark ? 'text-violet-200/90' : 'text-violet-900/80',
-                    )}>
+                    <span className={cn('text-[8px] font-bold leading-none mt-0.5', isDark ? 'text-violet-200/90' : 'text-violet-900/80')}>
                       {fmtCellAmt(entry.total)}
                     </span>
                   )}
@@ -1846,52 +1741,39 @@ function PersonalCalendarWidget({ fmt, selectedDay, onSelectDay }: PersonalCalen
               );
             })}
           </div>
-
-          {/* Heatmap legend */}
           <div className="flex items-center gap-1.5 mt-3">
             <span className="text-[9px] text-gray-400 dark:text-slate-600">Less</span>
             {[0.08, 0.25, 0.45, 0.7, 1].map(frac => {
               const mock = getCellHeat(frac * (maxDay || 1), maxDay || 1, isDark);
               return (
-                <div
-                  key={frac}
-                  className="w-3.5 h-3.5 rounded-sm border border-white/10 dark:border-black/20"
+                <div key={frac} className="w-3.5 h-3.5 rounded-sm border border-white/10 dark:border-black/20"
                   style={mock.background ? mock : { background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)' }}
                 />
               );
             })}
             <span className="text-[9px] text-gray-400 dark:text-slate-600">More</span>
           </div>
-
-          {/* Day detail panel */}
           <AnimatePresence>
             {selectedDay && (
-              <motion.div
-                key={selectedDay}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{   height: 0, opacity: 0 }}
+              <motion.div key={selectedDay}
+                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                 className="overflow-hidden"
               >
                 <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--analytics-divider)' }}>
-                  {/* Detail header */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">
                       {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' })}
                     </span>
-                    {selectedEntry && (
-                      <span className="text-xs font-bold text-violet-600 dark:text-violet-300">{fmt(selectedEntry.total)}</span>
-                    )}
+                    {selectedEntry && <span className="text-xs font-bold text-violet-600 dark:text-violet-300">{fmt(selectedEntry.total)}</span>}
                   </div>
-
                   {!selectedEntry ? (
                     <p className="text-xs text-gray-400 dark:text-slate-500 text-center py-3">No personal spending this day.</p>
                   ) : (
                     <div className="space-y-1.5 max-h-48 overflow-y-auto">
                       {selectedEntry.list.map(item => {
-                        const myShare  = item.expense.splits.find(s => s.participantId === item.memberId)?.share ?? 0;
-                        const settled  = item.expense.splits.every(s => Math.abs(s.share - s.paidAmount) < 0.01);
+                        const myShare = item.expense.splits.find(s => s.participantId === item.memberId)?.share ?? 0;
+                        const settled = item.expense.splits.every(s => Math.abs(s.share - s.paidAmount) < 0.01);
                         return (
                           <div key={item.expense.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5"
                             style={{ background: isDark ? 'rgba(139,92,246,0.07)' : 'rgba(139,92,246,0.05)' }}
@@ -1930,7 +1812,7 @@ function toLocalDateKey(isoUtc: string): string {
 }
 
 interface PersonalActivityProps extends PersonalCardProps {
-  filterDay?:    string | null;
+  filterDay?:     string | null;
   onClearFilter?: () => void;
 }
 
@@ -1964,28 +1846,18 @@ function PersonalActivityWidget({ items, fmt, loading, filterDay, onClearFilter 
             <span className="text-[10px] font-medium text-violet-600 dark:text-violet-400 bg-violet-500/10 border border-violet-500/20 rounded-full px-2 py-0.5">
               {filterLabel}
             </span>
-            <button
-              onClick={onClearFilter}
-              className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors"
-              title="Clear filter"
-            >
-              ✕
-            </button>
+            <button onClick={onClearFilter} className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors" title="Clear filter">✕</button>
           </div>
         ) : (
           <span className="ml-auto text-[10px] text-gray-400 dark:text-slate-500">All linked groups · chronological</span>
         )}
       </div>
-
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => (
             <div key={i} className="flex items-center gap-3">
               <Shimmer className="h-9 w-9 rounded-xl shrink-0" />
-              <div className="flex-1 space-y-1.5">
-                <Shimmer className="h-3 w-2/3 rounded-md" />
-                <Shimmer className="h-2.5 w-1/3 rounded-md" />
-              </div>
+              <div className="flex-1 space-y-1.5"><Shimmer className="h-3 w-2/3 rounded-md" /><Shimmer className="h-2.5 w-1/3 rounded-md" /></div>
               <Shimmer className="h-4 w-14 rounded-md shrink-0" />
             </div>
           ))}
@@ -2008,29 +1880,21 @@ function PersonalActivityWidget({ items, fmt, loading, filterDay, onClearFilter 
               : '';
             const cat      = categorize(item.expense.description);
             const catColor = SLICE_COLORS[cat] ?? '#8b5cf6';
-
             return (
-              <div key={item.expense.id}
-                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                {/* Category dot */}
+              <div key={item.expense.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                 <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: `${catColor}18`, border: `1px solid ${catColor}30` }}
                 >
                   <div className="w-2 h-2 rounded-full" style={{ background: catColor }} />
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-gray-800 dark:text-slate-200 truncate">{item.expense.description}</p>
                   <p className="text-[10px] text-gray-400 dark:text-slate-500">{item.groupName}{dateStr ? ` · ${dateStr}` : ''}</p>
                 </div>
-
                 <div className="text-right shrink-0">
                   <p className="text-xs font-bold text-gray-800 dark:text-slate-200 tabular-nums">{fmt(myShare)}</p>
                   <p className={cn('text-[10px] font-medium',
-                    iDidPay  ? 'text-violet-500 dark:text-violet-400' :
-                    settled  ? 'text-emerald-500' :
-                               'text-rose-500'
+                    iDidPay ? 'text-violet-500 dark:text-violet-400' : settled ? 'text-emerald-500' : 'text-rose-500'
                   )}>
                     {iDidPay ? 'you paid' : settled ? 'settled' : 'owed'}
                   </p>
@@ -2044,7 +1908,7 @@ function PersonalActivityWidget({ items, fmt, loading, filterDay, onClearFilter 
   );
 }
 
-// ─── Personal Dashboard (4-card grid + activity) ─────────────────────────────
+// ─── Personal Dashboard ───────────────────────────────────────────────────────
 
 function PersonalDashboard({ items, participantNames, fmt, loading }: {
   items:            PersonalExpense[];
@@ -2074,19 +1938,14 @@ function PersonalDashboard({ items, participantNames, fmt, loading }: {
 
   return (
     <div className="space-y-4">
-      {/* Row 1: 2-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PersonalDonutWidget     items={items} fmt={fmt} loading={loading} />
-        <PersonalDebtFlowWidget  items={items} fmt={fmt} loading={loading} participantNames={participantNames} />
+        <PersonalDonutWidget    items={items} fmt={fmt} loading={loading} />
+        <PersonalDebtFlowWidget items={items} fmt={fmt} loading={loading} participantNames={participantNames} />
       </div>
-
-      {/* Row 2: 2-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PersonalTotalsWidget   items={items} fmt={fmt} loading={loading} />
         <PersonalCalendarWidget fmt={fmt} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
       </div>
-
-      {/* Row 3: full-width activity feed — filters to selectedDay when a cell is clicked */}
       <PersonalActivityWidget
         items={items} fmt={fmt} loading={loading}
         filterDay={selectedDay}
@@ -2237,7 +2096,7 @@ export default function Analytics({ groups }: Props) {
 
       {/* ── Bento grid ── */}
       <div className="max-w-6xl mx-auto px-5 py-5">
-        {groups.length === 0 ? (
+        {groups.length === 0 && view !== 'personal' ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20">
               <BarChart3 size={28} className="text-violet-500/60" />

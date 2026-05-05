@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { PlusCircle, Trash2, CheckCircle2, Activity } from 'lucide-react';
+import { PlusCircle, Trash2, CheckCircle2, Activity, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { fetchActivityLogs, type ActivityEntry, type ActivityActionType } from '../lib/db';
 import { cn } from '../lib/cn';
+import { relativeTime } from '../utils/relativeTime';
 
 interface Props {
   groupId: string;
@@ -12,34 +13,6 @@ interface Props {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type TFunc = (key: string, opts?: Record<string, unknown>) => string;
-
-function relativeTime(iso: string, t: TFunc): string {
-  const then  = new Date(iso);
-  const now   = new Date();
-  const diff  = now.getTime() - then.getTime();
-  const s     = Math.floor(diff / 1000);
-
-  if (s < 10)  return t('activity.justNow');
-  if (s < 60)  return t('activity.secondsAgo', { count: s });
-
-  const m = Math.floor(s / 60);
-  if (m < 60)  return t('activity.minutesAgo', { count: m });
-
-  const time = then.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-
-  const todayStr     = now.toDateString();
-  const yesterdayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toDateString();
-
-  if (then.toDateString() === todayStr)     return t('activity.todayAt', { time });
-  if (then.toDateString() === yesterdayStr) return t('activity.yesterdayAt', { time });
-
-  if (diff < 6 * 24 * 60 * 60 * 1000) {
-    const day = then.toLocaleDateString([], { weekday: 'short' });
-    return t('activity.dayAt', { day, time });
-  }
-
-  return then.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
 
 function formatAmount(amount: number | null): string {
   if (amount == null) return '';
@@ -93,6 +66,7 @@ function StatusBadge({ settled }: { settled: boolean }) {
 function ActionIcon({ type }: { type: ActivityActionType | null }) {
   if (type === 'EXPENSE_ADDED')   return <PlusCircle   size={11} className="shrink-0 text-violet-500 dark:text-violet-400" />;
   if (type === 'EXPENSE_DELETED') return <Trash2       size={11} className="shrink-0 text-red-400 dark:text-red-500" />;
+  if (type === 'EXPENSE_EDITED')  return <Pencil       size={11} className="shrink-0 text-blue-400 dark:text-blue-500" />;
   if (type === 'SETTLEMENT_MADE') return <CheckCircle2 size={11} className="shrink-0 text-green-500 dark:text-green-400" />;
   return                                 <Activity     size={11} className="shrink-0 text-slate-400 dark:text-slate-500" />;
 }
@@ -105,8 +79,14 @@ function EntryRow({ entry, t }: { entry: ActivityEntry; t: TFunc }) {
 
   const toName = (() => {
     if (entry.actionType !== 'SETTLEMENT_MADE') return null;
-    const m = entry.message.match(/→ (.+)$/);
+    const m = entry.message.match(/→ ([^|]+)/);
     return m?.[1]?.trim() ?? null;
+  })();
+
+  const settlementDesc = (() => {
+    if (entry.actionType !== 'SETTLEMENT_MADE') return null;
+    const parts = entry.message.split('|');
+    return parts[1]?.trim() || null;
   })();
 
   return (
@@ -153,6 +133,27 @@ function EntryRow({ entry, t }: { entry: ActivityEntry; t: TFunc }) {
           </div>
         )}
 
+        {entry.actionType === 'EXPENSE_EDITED' && (
+          <div className="space-y-0.5">
+            <p className="flex items-center gap-1 flex-wrap leading-snug">
+              <span className="text-[11px] text-blue-500 dark:text-blue-400 font-medium">{t('activity.edited')}</span>
+              <span className="text-[11px] text-gray-400 dark:text-slate-500">{t('activity.expense')}</span>
+              {entry.amount != null && (
+                <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                  ({formatAmount(entry.amount)})
+                </span>
+              )}
+              {payerName && (
+                <>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400">{t('activity.paidBy')}</span>
+                  <PayerChip name={payerName} />
+                </>
+              )}
+            </p>
+            <p className="text-[11px] text-gray-500 dark:text-slate-400 italic">{entry.message}</p>
+          </div>
+        )}
+
         {entry.actionType === 'SETTLEMENT_MADE' && (
           <p className="flex items-center gap-1 flex-wrap leading-snug">
             {payerName && <PayerChip name={payerName} />}
@@ -162,6 +163,12 @@ function EntryRow({ entry, t }: { entry: ActivityEntry; t: TFunc }) {
               <span className="text-[11px] font-bold text-green-600 dark:text-green-400">
                 {formatAmount(entry.amount)}
               </span>
+            )}
+            {settlementDesc && (
+              <>
+                <span className="text-[11px] text-gray-400 dark:text-slate-500">{t('activity.for')}</span>
+                <span className="text-[11px] font-medium text-gray-600 dark:text-slate-300 italic">&ldquo;{settlementDesc}&rdquo;</span>
+              </>
             )}
           </p>
         )}

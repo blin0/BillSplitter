@@ -43,6 +43,11 @@ export interface Expense {
    * Undefined = no tip. Display-only — splits already include the converted tip.
    */
   tipSourceAmount?: number;
+  /**
+   * For exact splits: per-participant pre-tax amounts in sourceCurrency, keyed by participantId.
+   * Stored so the edit form can restore the original entered values.
+   */
+  exactAmountsSource?: Record<string, number>;
 }
 
 export interface Settlement {

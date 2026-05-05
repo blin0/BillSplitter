@@ -25,6 +25,7 @@ interface ExpenseMetadata {
   involvedParticipants: string[];
   taxPercent?:          number;
   tipSourceAmount?:     number;
+  exactAmountsSource?:  Record<string, number>;
 }
 
 // ─── Group info (used by sidebar / group list) ────────────────────────────────
@@ -47,22 +48,23 @@ export interface GroupMemberInfo {
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 export interface OwnProfile {
-  id:                 string;
-  fullName:           string | null;
-  avatarUrl:          string | null;
-  venmoHandle:        string | null;
-  cashappHandle:      string | null;
-  zelleHandle:        string | null;
-  defaultCurrency:    string;
-  defaultTaxRate:     number;
-  showEmail:          boolean;
-  showActivity:       boolean;
-  languagePreference: string | null;
+  id:                   string;
+  fullName:             string | null;
+  avatarUrl:            string | null;
+  venmoHandle:          string | null;
+  cashappHandle:        string | null;
+  zelleHandle:          string | null;
+  defaultCurrency:      string;
+  defaultTaxRate:       number;
+  defaultNewMemberRole: 'admin' | 'editor' | 'viewer';
+  showEmail:            boolean;
+  showActivity:         boolean;
+  languagePreference:   string | null;
   // Stripe / subscription
-  stripeCustomerId:   string | null;
-  subscriptionStatus: string | null;
-  isPro:              boolean;
-  priceId:            string | null;
+  stripeCustomerId:     string | null;
+  subscriptionStatus:   string | null;
+  isPro:                boolean;
+  priceId:              string | null;
 }
 
 export interface MemberProfile {
@@ -80,45 +82,51 @@ export async function fetchOwnProfile(): Promise<DbResult<OwnProfile>> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle, default_currency, default_tax_rate, show_email, show_activity, language_preference, stripe_customer_id, subscription_status, is_pro, price_id')
+    .select('id, full_name, avatar_url, venmo_handle, cashapp_handle, zelle_handle, default_currency, default_tax_rate, default_new_member_role, show_email, show_activity, language_preference, stripe_customer_id, subscription_status, is_pro, price_id')
     .eq('id', user.id)
     .single();
 
   if (error) return { data: null, error: error.message };
 
+  const rawRole = data.default_new_member_role ?? 'editor';
+  const safeRole: 'admin' | 'editor' | 'viewer' =
+    rawRole === 'admin' || rawRole === 'editor' || rawRole === 'viewer' ? rawRole : 'editor';
+
   return {
     data: {
-      id:                 data.id,
-      fullName:           data.full_name,
-      avatarUrl:          data.avatar_url,
-      venmoHandle:        data.venmo_handle,
-      cashappHandle:      data.cashapp_handle,
-      zelleHandle:        data.zelle_handle ?? null,
-      defaultCurrency:    data.default_currency ?? 'USD',
-      defaultTaxRate:     Number(data.default_tax_rate ?? 0),
-      showEmail:          data.show_email  ?? true,
-      showActivity:       data.show_activity ?? true,
-      languagePreference: data.language_preference ?? null,
-      stripeCustomerId:   data.stripe_customer_id ?? null,
-      subscriptionStatus: data.subscription_status ?? null,
-      isPro:              data.is_pro ?? false,
-      priceId:            data.price_id ?? null,
+      id:                   data.id,
+      fullName:             data.full_name,
+      avatarUrl:            data.avatar_url,
+      venmoHandle:          data.venmo_handle,
+      cashappHandle:        data.cashapp_handle,
+      zelleHandle:          data.zelle_handle ?? null,
+      defaultCurrency:      data.default_currency ?? 'USD',
+      defaultTaxRate:       Number(data.default_tax_rate ?? 0),
+      defaultNewMemberRole: safeRole,
+      showEmail:            data.show_email  ?? true,
+      showActivity:         data.show_activity ?? true,
+      languagePreference:   data.language_preference ?? null,
+      stripeCustomerId:     data.stripe_customer_id ?? null,
+      subscriptionStatus:   data.subscription_status ?? null,
+      isPro:                data.is_pro ?? false,
+      priceId:              data.price_id ?? null,
     },
     error: null,
   };
 }
 
 export async function updateOwnProfile(updates: {
-  fullName?:            string | null;
-  avatarUrl?:           string | null;
-  venmoHandle?:         string | null;
-  cashappHandle?:       string | null;
-  zelleHandle?:         string | null;
-  defaultCurrency?:     string;
-  defaultTaxRate?:      number;
-  showEmail?:           boolean;
-  showActivity?:        boolean;
-  languagePreference?:  string | null;
+  fullName?:              string | null;
+  avatarUrl?:             string | null;
+  venmoHandle?:           string | null;
+  cashappHandle?:         string | null;
+  zelleHandle?:           string | null;
+  defaultCurrency?:       string;
+  defaultTaxRate?:        number;
+  defaultNewMemberRole?:  'admin' | 'editor' | 'viewer';
+  showEmail?:             boolean;
+  showActivity?:          boolean;
+  languagePreference?:    string | null;
 }): Promise<DbResult<void>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: 'Not authenticated' };
@@ -126,16 +134,17 @@ export async function updateOwnProfile(updates: {
   const { error } = await supabase
     .from('profiles')
     .update({
-      ...(updates.fullName        !== undefined && { full_name:        updates.fullName        }),
-      ...(updates.avatarUrl       !== undefined && { avatar_url:       updates.avatarUrl       }),
-      ...(updates.venmoHandle     !== undefined && { venmo_handle:     updates.venmoHandle     }),
-      ...(updates.cashappHandle   !== undefined && { cashapp_handle:   updates.cashappHandle   }),
-      ...(updates.zelleHandle     !== undefined && { zelle_handle:     updates.zelleHandle     }),
-      ...(updates.defaultCurrency !== undefined && { default_currency: updates.defaultCurrency }),
-      ...(updates.defaultTaxRate  !== undefined && { default_tax_rate: updates.defaultTaxRate  }),
-      ...(updates.showEmail            !== undefined && { show_email:           updates.showEmail            }),
-      ...(updates.showActivity         !== undefined && { show_activity:        updates.showActivity         }),
-      ...(updates.languagePreference   !== undefined && { language_preference:  updates.languagePreference   }),
+      ...(updates.fullName             !== undefined && { full_name:               updates.fullName             }),
+      ...(updates.avatarUrl            !== undefined && { avatar_url:              updates.avatarUrl            }),
+      ...(updates.venmoHandle          !== undefined && { venmo_handle:            updates.venmoHandle          }),
+      ...(updates.cashappHandle        !== undefined && { cashapp_handle:          updates.cashappHandle        }),
+      ...(updates.zelleHandle          !== undefined && { zelle_handle:            updates.zelleHandle          }),
+      ...(updates.defaultCurrency      !== undefined && { default_currency:        updates.defaultCurrency      }),
+      ...(updates.defaultTaxRate       !== undefined && { default_tax_rate:        updates.defaultTaxRate       }),
+      ...(updates.defaultNewMemberRole !== undefined && { default_new_member_role: updates.defaultNewMemberRole }),
+      ...(updates.showEmail            !== undefined && { show_email:              updates.showEmail            }),
+      ...(updates.showActivity         !== undefined && { show_activity:           updates.showActivity         }),
+      ...(updates.languagePreference   !== undefined && { language_preference:     updates.languagePreference   }),
     })
     .eq('id', user.id);
 
@@ -470,10 +479,11 @@ export async function fetchParticipants(groupId: string): Promise<DbResult<Parti
 export async function insertParticipant(
   groupId: string,
   name: string,
+  userId?: string,
 ): Promise<DbResult<Participant>> {
   const { data, error } = await supabase
     .from('named_participants')
-    .insert({ group_id: groupId, name })
+    .insert({ group_id: groupId, name, ...(userId ? { user_id: userId } : {}) })
     .select('id, name')
     .single();
 
@@ -539,6 +549,7 @@ export async function fetchExpenses(groupId: string): Promise<DbResult<Expense[]
       isHighlighted:        false,
       taxPercent:           meta.taxPercent,
       tipSourceAmount:      meta.tipSourceAmount,
+      exactAmountsSource:   meta.exactAmountsSource,
       date:                 row.created_at as string | undefined,
     };
   });
@@ -558,6 +569,7 @@ export async function insertExpense(
     involvedParticipants: expense.involvedParticipants,
     taxPercent:           expense.taxPercent,
     tipSourceAmount:      expense.tipSourceAmount,
+    exactAmountsSource:   expense.exactAmountsSource,
   };
 
   const splits = expense.splits.map(s => ({
@@ -619,6 +631,7 @@ export async function fetchExpenseById(expenseId: string): Promise<DbResult<Expe
       isHighlighted:        false,
       taxPercent:           meta.taxPercent,
       tipSourceAmount:      meta.tipSourceAmount,
+      exactAmountsSource:   meta.exactAmountsSource,
     },
     error: null,
   };
@@ -633,9 +646,60 @@ export async function deleteExpense(expenseId: string): Promise<DbResult<void>> 
   return { data: null, error: error?.message ?? null };
 }
 
+/** Update an existing expense's fields and replace all of its splits. */
+export async function updateExpense(
+  expenseId: string,
+  expense:   Expense,
+): Promise<DbResult<void>> {
+  const metadata: ExpenseMetadata = {
+    sourceAmount:         expense.sourceAmount,
+    sourceCurrency:       expense.sourceCurrency,
+    lockedRate:           expense.lockedRate,
+    splitType:            expense.splitType,
+    involvedParticipants: expense.involvedParticipants,
+    taxPercent:           expense.taxPercent,
+    tipSourceAmount:      expense.tipSourceAmount,
+    exactAmountsSource:   expense.exactAmountsSource,
+  };
+
+  const { error: expErr } = await supabase
+    .from('expenses')
+    .update({
+      description:          expense.description,
+      total_amount:         expense.totalAmount,
+      payer_participant_id: expense.paidBy,
+      metadata:             metadata as unknown as Json,
+    })
+    .eq('id', expenseId);
+
+  if (expErr) return { data: null, error: expErr.message };
+
+  // Replace splits atomically: delete then re-insert
+  const { error: delErr } = await supabase
+    .from('splits')
+    .delete()
+    .eq('expense_id', expenseId);
+
+  if (delErr) return { data: null, error: delErr.message };
+
+  const { error: insertErr } = await supabase
+    .from('splits')
+    .insert(
+      expense.splits.map(s => ({
+        expense_id:     expenseId,
+        participant_id: s.participantId,
+        amount_owed:    s.share,
+        paid_amount:    s.paidAmount,
+        is_paid:        s.isSettled,
+      }))
+    );
+
+  return { data: null, error: insertErr?.message ?? null };
+}
+
 // ─── Activity log ─────────────────────────────────────────────────────────────
 
-export type ActivityActionType = 'EXPENSE_ADDED' | 'EXPENSE_DELETED' | 'SETTLEMENT_MADE';
+export type ActivityActionType = 'EXPENSE_ADDED' | 'EXPENSE_DELETED' | 'EXPENSE_EDITED' | 'SETTLEMENT_MADE';
 
 export interface ActivityProfile {
   id:        string;
@@ -786,10 +850,6 @@ export async function syncSplitsForExpense(
 
 // ─── User–member identity links ───────────────────────────────────────────────
 
-/**
- * Returns the named_participant id that the current user has claimed as "me"
- * in the given group, or null if no link exists yet.
- */
 export async function fetchMemberLink(groupId: string): Promise<DbResult<string | null>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: null };
@@ -806,10 +866,6 @@ export async function fetchMemberLink(groupId: string): Promise<DbResult<string 
   return { data: (data as { member_id: string } | null)?.member_id ?? null, error: null };
 }
 
-/**
- * Upsert: link the current user to a named_participant in a group.
- * Replaces any existing link (unique constraint on user_id + group_id).
- */
 export async function setMemberLink(groupId: string, memberId: string): Promise<DbResult<void>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: 'Not authenticated' };
@@ -825,7 +881,6 @@ export async function setMemberLink(groupId: string, memberId: string): Promise<
   return { data: null, error: error?.message ?? null };
 }
 
-/** Remove the current user's identity link for a group (unlinking). */
 export async function deleteMemberLink(groupId: string): Promise<DbResult<void>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: 'Not authenticated' };
@@ -840,21 +895,16 @@ export async function deleteMemberLink(groupId: string): Promise<DbResult<void>>
   return { data: null, error: error?.message ?? null };
 }
 
-/**
- * Fetch all expenses across all groups where the current user's linked member
- * appears in the splits. Used by the personal analytics view.
- */
 export interface PersonalExpense {
-  groupId:     string;
-  groupName:   string;
-  memberId:    string;
-  memberName:  string;
-  expense:     Expense;
+  groupId:    string;
+  groupName:  string;
+  memberId:   string;
+  memberName: string;
+  expense:    Expense;
 }
 
 export interface PersonalData {
   items:            PersonalExpense[];
-  /** Maps named_participant.id → name for every participant in all linked groups. */
   participantNames: Record<string, string>;
 }
 
@@ -862,7 +912,6 @@ export async function fetchPersonalExpenses(): Promise<DbResult<PersonalData>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: { items: [], participantNames: {} }, error: null };
 
-  // Fetch all links for the current user
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rawLinks, error: linksErr } = await (supabase as any)
     .from('user_member_links')
@@ -876,43 +925,30 @@ export async function fetchPersonalExpenses(): Promise<DbResult<PersonalData>> {
   const groupIds  = links.map(l => l.group_id);
   const memberIds = links.map(l => l.member_id);
 
-  // Fetch group names
-  const { data: groupRows, error: groupErr } = await supabase
-    .from('groups')
-    .select('id, name')
-    .in('id', groupIds);
+  const { data: groupRows, error: groupErr } = await supabase.from('groups').select('id, name').in('id', groupIds);
   if (groupErr) return { data: null, error: groupErr.message };
   const groupNameMap = new Map((groupRows ?? []).map(g => [g.id, g.name]));
 
-  // Fetch ALL named_participants for all linked groups (needed for debt-flow peer name resolution)
   const { data: memberRows, error: memberErr } = await supabase
-    .from('named_participants')
-    .select('id, name, group_id')
-    .in('group_id', groupIds);
+    .from('named_participants').select('id, name, group_id').in('group_id', groupIds);
   if (memberErr) return { data: null, error: memberErr.message };
 
-  // participantNames: id → name (across all linked groups, used in the UI)
   const participantNames: Record<string, string> = {};
   for (const m of memberRows ?? []) participantNames[m.id] = m.name;
 
-  // memberNameMap: only the "me" participants (subset of participantNames)
   const memberNameMap = new Map(
     (memberRows ?? []).filter(m => memberIds.includes(m.id)).map(m => [m.id, m.name])
   );
 
-  // Build link lookup: group_id → member_id
   const linkMap = new Map(links.map(l => [l.group_id, l.member_id]));
 
-  // Fetch all expenses for those groups, then filter to those involving the linked member
   const results: PersonalExpense[] = [];
   for (const groupId of groupIds) {
     const memberId = linkMap.get(groupId)!;
     const { data: expRows, error: expErr } = await supabase
       .from('expenses')
-      .select(`
-        id, description, total_amount, payer_participant_id, metadata, created_at,
-        splits ( id, participant_id, amount_owed, paid_amount, is_paid )
-      `)
+      .select(`id, description, total_amount, payer_participant_id, metadata, created_at,
+        splits ( id, participant_id, amount_owed, paid_amount, is_paid )`)
       .eq('group_id', groupId)
       .order('created_at');
 
@@ -920,11 +956,9 @@ export async function fetchPersonalExpenses(): Promise<DbResult<PersonalData>> {
 
     type SplitRow = { id: string; participant_id: string | null; amount_owed: number; paid_amount: number; is_paid: boolean | null };
     for (const row of expRows ?? []) {
-      const meta = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
-      const payer = row.payer_participant_id ?? '';
+      const meta      = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
+      const payer     = row.payer_participant_id ?? '';
       const rawSplits = (row.splits as unknown as SplitRow[]) ?? [];
-
-      // Only include expenses where the linked member has a split
       if (!rawSplits.some(s => s.participant_id === memberId)) continue;
 
       const splits: Split[] = rawSplits.map(s => {
@@ -965,16 +999,10 @@ export async function fetchPersonalExpenses(): Promise<DbResult<PersonalData>> {
   return { data: { items: results, participantNames }, error: null };
 }
 
-/**
- * Fetch personal expenses for a single calendar month, bounded by local-timezone
- * midnight so the calendar keys (derived from getDate/getMonth) stay consistent
- * with what the user sees in their timezone.
- */
 export async function fetchPersonalCalendarMonth(year: number, month: number): Promise<DbResult<PersonalExpense[]>> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: [], error: null };
 
-  // Local-timezone month boundaries → converted to UTC for the Supabase filter
   const startUtc = new Date(year, month, 1).toISOString();
   const endUtc   = new Date(year, month + 1, 1).toISOString();
 
@@ -1005,10 +1033,8 @@ export async function fetchPersonalCalendarMonth(year: number, month: number): P
     const memberId = linkMap.get(groupId)!;
     const { data: expRows, error: expErr } = await supabase
       .from('expenses')
-      .select(`
-        id, description, total_amount, payer_participant_id, metadata, created_at,
-        splits ( id, participant_id, amount_owed, paid_amount, is_paid )
-      `)
+      .select(`id, description, total_amount, payer_participant_id, metadata, created_at,
+        splits ( id, participant_id, amount_owed, paid_amount, is_paid )`)
       .eq('group_id', groupId)
       .gte('created_at', startUtc)
       .lt('created_at', endUtc)
@@ -1021,7 +1047,6 @@ export async function fetchPersonalCalendarMonth(year: number, month: number): P
       const meta      = (row.metadata ?? {}) as Partial<ExpenseMetadata>;
       const payer     = row.payer_participant_id ?? '';
       const rawSplits = (row.splits as unknown as SplitRow[]) ?? [];
-
       if (!rawSplits.some(s => s.participant_id === memberId)) continue;
 
       const splits: Split[] = rawSplits.map(s => {

@@ -65,21 +65,23 @@ function saveDescPrefs(key: string, prefs: DescPrefs) {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  value:      string;
-  onChange:   (v: string) => void;
-  nextRef?:   RefObject<HTMLElement | null>;
-  onCommit?:  () => void;
+  value:       string;
+  onChange:    (v: string) => void;
+  nextRef?:    RefObject<HTMLElement | null>;
+  onCommit?:   () => void;
   /**
    * When provided, favorite/default buttons appear in the dropdown and
    * preferences are saved to localStorage under `bsp_descs_${storageKey}`.
    * Favorites replace the default quick chips below the input.
    */
   storageKey?: string;
+  /** If false, focusing the input will NOT auto-open the dropdown. Default: true. */
+  openOnFocus?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DescriptionComboBox({ value, onChange, nextRef, onCommit, storageKey }: Props) {
+export default function DescriptionComboBox({ value, onChange, nextRef, onCommit, storageKey, openOnFocus = true }: Props) {
   const lsKey = storageKey ? `bsp_descs_${storageKey}` : null;
 
   const [open,  setOpen ] = useState(false);
@@ -192,7 +194,7 @@ export default function DescriptionComboBox({ value, onChange, nextRef, onCommit
           name="expense-description"
           value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { if (openOnFocus) setOpen(true); }}
           onKeyDown={handleKeyDown}
           placeholder="Description (e.g. Dinner)"
           aria-autocomplete="list"
