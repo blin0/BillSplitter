@@ -305,12 +305,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarUrl,       setAvatarUrl      ] = useState<string | null>(null);
 
-  const [displayName,    setDisplayName   ] = useState('');
-  const [venmoHandle,    setVenmoHandle   ] = useState('');
-  const [cashappHandle,  setCashappHandle ] = useState('');
-  const [zelleHandle,    setZelleHandle   ] = useState('');
-  const [currency,       setCurrencyState ] = useState<CurrencyCode>('USD');
-  const [defaultTaxRate, setDefaultTaxRate] = useState<string>('');
+  const [displayName,         setDisplayName        ] = useState('');
+  const [venmoHandle,         setVenmoHandle        ] = useState('');
+  const [cashappHandle,       setCashappHandle      ] = useState('');
+  const [zelleHandle,         setZelleHandle        ] = useState('');
+  const [currency,            setCurrencyState      ] = useState<CurrencyCode>('USD');
+  const [defaultTaxRate,      setDefaultTaxRate     ] = useState<string>('');
+  const [defaultNewMemberRole, setDefaultNewMemberRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
 
   useEffect(() => {
     let cancelled = false;
@@ -327,6 +328,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
         setZelleHandle(p.zelleHandle ?? '');
         setCurrencyState((p.defaultCurrency as CurrencyCode) ?? 'USD');
         setDefaultTaxRate(p.defaultTaxRate > 0 ? String(p.defaultTaxRate) : '');
+        setDefaultNewMemberRole(p.defaultNewMemberRole ?? 'editor');
       }
       if (sRes.data) setStats(sRes.data);
     });
@@ -336,12 +338,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const taxRateNum = Math.max(0, Math.min(100, parseFloat(defaultTaxRate) || 0));
 
   const isDirty = profile != null && (
-    displayName   !== (profile.fullName      ?? '')  ||
-    venmoHandle   !== (profile.venmoHandle   ?? '')  ||
-    cashappHandle !== (profile.cashappHandle ?? '')  ||
-    zelleHandle   !== (profile.zelleHandle   ?? '')  ||
-    currency      !== (profile.defaultCurrency as CurrencyCode ?? 'USD') ||
-    taxRateNum    !== (profile.defaultTaxRate ?? 0)
+    displayName          !== (profile.fullName      ?? '')  ||
+    venmoHandle          !== (profile.venmoHandle   ?? '')  ||
+    cashappHandle        !== (profile.cashappHandle ?? '')  ||
+    zelleHandle          !== (profile.zelleHandle   ?? '')  ||
+    currency             !== (profile.defaultCurrency as CurrencyCode ?? 'USD') ||
+    taxRateNum           !== (profile.defaultTaxRate ?? 0) ||
+    defaultNewMemberRole !== (profile.defaultNewMemberRole ?? 'editor')
   );
 
   async function handleAvatarUpload(file: File) {
@@ -369,12 +372,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     const cleanCashApp = cashappHandle.replace(/^\$+/, '');
     const cleanZelle   = zelleHandle.trim();
     const { error } = await updateOwnProfile({
-      fullName:        displayName.trim() || null,
-      venmoHandle:     cleanVenmo   || null,
-      cashappHandle:   cleanCashApp || null,
-      zelleHandle:     cleanZelle   || null,
-      defaultCurrency: currency,
-      defaultTaxRate:  taxRateNum,
+      fullName:             displayName.trim() || null,
+      venmoHandle:          cleanVenmo   || null,
+      cashappHandle:        cleanCashApp || null,
+      zelleHandle:          cleanZelle   || null,
+      defaultCurrency:      currency,
+      defaultTaxRate:       taxRateNum,
+      defaultNewMemberRole,
     });
     setSaving(false);
     if (error) { setSaveError(error); return; }
@@ -384,12 +388,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     }
     setProfile(prev => prev ? {
       ...prev,
-      fullName: displayName.trim() || null,
-      venmoHandle: cleanVenmo || null,
-      cashappHandle: cleanCashApp || null,
-      zelleHandle: cleanZelle || null,
-      defaultCurrency: currency,
-      defaultTaxRate: taxRateNum,
+      fullName:             displayName.trim() || null,
+      venmoHandle:          cleanVenmo || null,
+      cashappHandle:        cleanCashApp || null,
+      zelleHandle:          cleanZelle || null,
+      defaultCurrency:      currency,
+      defaultTaxRate:       taxRateNum,
+      defaultNewMemberRole,
     } : prev);
     setVenmoHandle(cleanVenmo);
     setCashappHandle(cleanCashApp);
@@ -570,6 +575,40 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           )}
                         />
                       </button>
+                    </div>
+                  </div>
+
+                  {/* ── Default new member permission ── */}
+                  <div className="pt-1 border-t border-gray-100 dark:border-slate-800 space-y-1.5">
+                    <div className="pt-3">
+                      <p className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                        {t('profile.defaultMemberRole')}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-slate-500 leading-relaxed mt-0.5 mb-2.5">
+                        {t('profile.defaultMemberRoleDesc')}
+                      </p>
+                      <div className="flex rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden text-xs font-medium">
+                        {(['viewer', 'editor', 'admin'] as const).map((role, i) => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => setDefaultNewMemberRole(role)}
+                            className={cn(
+                              'flex-1 py-1.5 transition-colors capitalize',
+                              i > 0 && 'border-l border-gray-200 dark:border-slate-700',
+                              defaultNewMemberRole === role
+                                ? role === 'admin'
+                                  ? 'bg-amber-500 text-white'
+                                  : role === 'editor'
+                                  ? 'bg-violet-600 text-white'
+                                  : 'bg-gray-500 text-white'
+                                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700',
+                            )}
+                          >
+                            {role}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

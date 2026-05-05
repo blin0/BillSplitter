@@ -36,6 +36,8 @@ import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour';
 import Profile from './pages/Profile';
 import Analytics from './pages/Analytics';
 import Landing from './pages/Landing';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProtectedRoute from './components/ProtectedRoute';
 import ResetPassword from './pages/ResetPassword';
 import { useGroupSync } from './hooks/useGroupSync';
@@ -47,9 +49,13 @@ import {
   fetchExpenses,
   insertExpense,
   deleteExpense,
+  updateExpense,
   syncSplitsForExpense,
   logActivity,
   fetchOwnProfile,
+  fetchMemberLink,
+  setMemberLink,
+  deleteMemberLink,
   type GroupInfo,
 } from './lib/db';
 
@@ -164,7 +170,7 @@ function GroupRouteSync({ groups, activeGroupId, groupsLoading, onSync }: GroupR
 function AppInner() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { dark, toggle } = useTheme();
-  const { setCurrency } = useCurrency();
+  const { setCurrency, formatPrice } = useCurrency();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const subscription = useSubscriptionContext();
@@ -172,6 +178,8 @@ function AppInner() {
   const [showSignIn,           setShowSignIn          ] = useState(false);
   const [sidebarOpen,          setSidebarOpen         ] = useState(false);
   const [showExpenseModal,     setShowExpenseModal    ] = useState(false);
+  const [editingExpense,       setEditingExpense      ] = useState<Expense | null>(null);
+  const [linkedMemberId,       setLinkedMemberId      ] = useState<string | null>(null);
   const [desktopExpenseModal,  setDesktopExpenseModal ] = useState(() =>
     loadJson<boolean>('billsplitter_desktop_modal', false)
   );
@@ -404,13 +412,16 @@ function AppInner() {
     let cancelled = false;
     setDataLoading(true);
 
+    setLinkedMemberId(null);
     Promise.all([
       fetchParticipants(activeGroupId),
       fetchExpenses(activeGroupId),
-    ]).then(([pResult, eResult]) => {
+      fetchMemberLink(activeGroupId),
+    ]).then(([pResult, eResult, linkResult]) => {
       if (cancelled) return;
       if (pResult.data) setDbParticipants(pResult.data);
       if (eResult.data) setDbExpenses(eResult.data);
+      setLinkedMemberId(linkResult.data ?? null);
       setDataLoading(false);
     });
 
@@ -598,6 +609,32 @@ function AppInner() {
     }
   }
 
+  async function saveEditedExpense(updated: Expense) {
+    if (isSignedIn && activeGroupId) {
+      const original = dbExpenses.find(e => e.id === updated.id);
+      const { error } = await updateExpense(updated.id, updated);
+      if (error) return;
+      setDbExpenses(prev => prev.map(e => e.id === updated.id ? { ...updated, isHighlighted: e.isHighlighted } : e));
+      setEditingExpense(null);
+      const changes: string[] = [];
+      if (original?.description !== updated.description) changes.push(`"${original?.description}" → "${updated.description}"`);
+      if (original?.totalAmount !== updated.totalAmount) changes.push(`${formatPrice(original?.totalAmount ?? 0)} → ${formatPrice(updated.totalAmount)}`);
+      if (original?.paidBy !== updated.paidBy) changes.push('payer changed');
+      void logActivity({
+        groupId:       activeGroupId,
+        actionType:    'EXPENSE_EDITED',
+        expenseId:     updated.id,
+        amount:        updated.totalAmount,
+        participantId: updated.paidBy,
+        isSettled:     false,
+        message:       changes.length > 0 ? changes.join('; ') : updated.description,
+      });
+    } else {
+      setGuestExpenses(prev => prev.map(e => e.id === updated.id ? { ...updated, isHighlighted: e.isHighlighted } : e));
+      setEditingExpense(null);
+    }
+  }
+
   function toggleHighlight(id: string) {
     setExpenses(prev =>
       prev.map(e => e.id === id ? { ...e, isHighlighted: !e.isHighlighted } : e)
@@ -678,19 +715,39 @@ function AppInner() {
     return participants.find(p => p.id === id)?.name ?? id;
   }
 
+  // ── Identity link handlers ─────────────────────────────────────────────────
+
+  async function handleLink(memberId: string) {
+    if (!activeGroupId) return;
+    const { error } = await setMemberLink(activeGroupId, memberId);
+    if (!error) setLinkedMemberId(memberId);
+  }
+
+  async function handleUnlink() {
+    if (!activeGroupId) return;
+    const { error } = await deleteMemberLink(activeGroupId);
+    if (!error) setLinkedMemberId(null);
+  }
+
   function settleDebt(from: string, to: string, amount: number) {
+    const descs = [...new Set(
+      expenses
+        .filter(e => e.isHighlighted && e.splits.some(s => s.participantId === from && !s.isSettled))
+        .map(e => e.description),
+    )];
     setExpenses(prev => {
       const next = applyPayment(prev, from, to, amount, true);
       syncSettlement(next, prev);
       return next;
     });
     if (isSignedIn && activeGroupId) {
+      const descSuffix = descs.length ? `|${descs.join(', ')}` : '';
       void logActivity({
         groupId:       activeGroupId,
         actionType:    'SETTLEMENT_MADE',
         amount,
         participantId: from,
-        message:       `settled for ${nameOf(from)} → ${nameOf(to)}`,
+        message:       `settled for ${nameOf(from)} → ${nameOf(to)}${descSuffix}`,
       });
     }
   }
@@ -744,6 +801,7 @@ function AppInner() {
           groups={groups}
           activeGroupId={activeGroupId}
           currentUserId={user?.id ?? null}
+          currentUserName={profileDisplayName ?? user?.email?.split('@')[0] ?? null}
           onSelect={handleSelectGroup}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -1043,6 +1101,10 @@ function AppInner() {
                       onAdd={addParticipant}
                       onRemove={removeParticipant}
                       readOnly={isSignedIn && isViewer}
+                      linkedMemberId={linkedMemberId}
+                      onLink={handleLink}
+                      onUnlink={handleUnlink}
+                      identityEnabled={isSignedIn}
                     />
                   </div>
                   <div className="order-2">
@@ -1097,6 +1159,7 @@ function AppInner() {
                       onRemove={removeExpense}
                       onToggleHighlight={toggleHighlight}
                       onSelectAllUnsettled={selectAllUnsettled}
+                      onEdit={!(isSignedIn && isViewer) ? setEditingExpense : undefined}
                       readOnly={isSignedIn && isViewer}
                     />
                   </div>
@@ -1169,6 +1232,18 @@ function AppInner() {
         onUpgrade={() => { setShowExpenseModal(false); navigate('/profile'); }}
       />
 
+      {/* Edit expense modal — reuses ExpenseModal in edit mode */}
+      <ExpenseModal
+        isOpen={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        participants={participants}
+        onAdd={addExpense}
+        initialExpense={editingExpense ?? undefined}
+        onSave={saveEditedExpense}
+        groupId={activeGroupId ?? undefined}
+        groupTaxRate={groups.find(g => g.id === activeGroupId)?.defaultTaxRate}
+      />
+
       {!isProfilePage && !isFeedbackPage && <FeedbackButton />}
     </div>
   );
@@ -1182,6 +1257,8 @@ export default function App() {
       <SubscriptionProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/*" element={
             <CurrencyProvider>

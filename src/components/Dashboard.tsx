@@ -48,6 +48,18 @@ function topCategories(expenses: Expense[]): { key: string; pct: number }[] {
     .slice(0, 4);
 }
 
+// ── Spent-by-member computation ──────────────────────────────────────────────
+
+function computePersonalShareByMember(expenses: Expense[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const e of expenses) {
+    for (const s of e.splits) {
+      totals[s.participantId] = round2((totals[s.participantId] ?? 0) + s.share);
+    }
+  }
+  return totals;
+}
+
 // ── Tax tracked computation ───────────────────────────────────────────────────
 
 function computeTaxTracked(expenses: Expense[]): { totalTax: number; count: number } {
@@ -88,8 +100,9 @@ export default function Dashboard({ participants, balances, totalSpending, settl
     return participants.find(p => p.id === id)?.name ?? id;
   }
 
-  const cats       = topCategories(expenses);
-  const taxTracked = computeTaxTracked(expenses);
+  const cats        = topCategories(expenses);
+  const taxTracked  = computeTaxTracked(expenses);
+  const spentByMember = computePersonalShareByMember(expenses);
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
@@ -154,10 +167,11 @@ export default function Dashboard({ participants, balances, totalSpending, settl
       ) : (
         <div className="space-y-1.5">
           {participants.map((p, idx) => {
-            const bal    = round2(balances[p.id] ?? 0);
-            const isOwed = bal > 0.01;
-            const owes   = bal < -0.01;
-            const isLast = idx >= participants.length - 2; // flip tooltip up for bottom rows
+            const bal        = round2(balances[p.id] ?? 0);
+            const isOwed     = bal > 0.01;
+            const owes       = bal < -0.01;
+            const isLast     = idx >= participants.length - 2;
+            const totalSpent = round2(spentByMember[p.id] ?? 0);
 
             // Who this person owes (they are `from` in a settlement)
             const owesTo = settlements.filter(s => s.from === p.id);
@@ -175,17 +189,37 @@ export default function Dashboard({ participants, balances, totalSpending, settl
                 key={p.id}
                 className="relative group flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-transparent dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-help"
               >
-                {/* Left: avatar + name */}
-                <div className="flex items-center gap-2">
+                {/* Left: avatar + name + spent */}
+                <div className="flex items-center gap-2 min-w-0">
                   <div className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
+                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
                     isOwed ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
                            : owes ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
                            : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
                   )}>
                     {p.name[0].toUpperCase()}
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200">{nameOf(p.id)}</span>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-700 dark:text-slate-200 block truncate">{nameOf(p.id)}</span>
+                    {totalSpent > 0 && (
+                      <div className="relative group/spent inline-block">
+                        <span className="text-xs text-slate-400 dark:text-slate-500 cursor-help">
+                          {t('dashboard.spent')}: {formatPrice(totalSpent)}
+                        </span>
+                        <div className={cn(
+                          'absolute z-30 w-52 rounded-xl border shadow-2xl shadow-black/10',
+                          'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700',
+                          'text-slate-700 dark:text-slate-100 text-xs leading-snug p-2.5',
+                          'pointer-events-none left-0 top-full mt-1',
+                          'opacity-0 group-hover/spent:opacity-100',
+                          'translate-y-1 group-hover/spent:translate-y-0',
+                          'transition-all duration-200 ease-out',
+                        )}>
+                          {t('dashboard.spentTooltip')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Right: amount + icon */}

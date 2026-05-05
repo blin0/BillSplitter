@@ -271,18 +271,21 @@ export type Database = {
           group_id: string
           id: string
           name: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
           group_id: string
           id?: string
           name: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
           group_id?: string
           id?: string
           name?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -300,6 +303,7 @@ export type Database = {
           cashapp_handle: string | null
           created_at: string | null
           default_currency: string
+          default_new_member_role: string
           default_tax_rate: number
           full_name: string | null
           id: string
@@ -319,6 +323,7 @@ export type Database = {
           cashapp_handle?: string | null
           created_at?: string | null
           default_currency?: string
+          default_new_member_role?: string
           default_tax_rate?: number
           full_name?: string | null
           id: string
@@ -338,6 +343,7 @@ export type Database = {
           cashapp_handle?: string | null
           created_at?: string | null
           default_currency?: string
+          default_new_member_role?: string
           default_tax_rate?: number
           full_name?: string | null
           id?: string

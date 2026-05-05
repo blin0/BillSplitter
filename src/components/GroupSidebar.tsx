@@ -4,31 +4,32 @@ import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTrian
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, fetchGroupMemberCount, createGroup, joinGroupByCode } from '../lib/db';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, fetchGroupMemberCount, createGroup, joinGroupByCode, insertParticipant } from '../lib/db';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSubscriptionContext } from '../context/SubscriptionContext';
 import { groupLimit, memberLimit, nextTierName } from '../lib/hasAccess';
 import ConfirmModal from './ui/ConfirmModal';
 
 interface Props {
-  groups:         GroupInfo[];
-  activeGroupId:  string | null;
-  currentUserId:  string | null;
-  onSelect:       (id: string) => void;
-  isOpen:         boolean;
-  onClose:        () => void;
-  onGroupAdded:   (group: GroupInfo) => void;
-  onGroupRenamed: (groupId: string, newName: string) => void;
+  groups:              GroupInfo[];
+  activeGroupId:       string | null;
+  currentUserId:       string | null;
+  currentUserName:     string | null;
+  onSelect:            (id: string) => void;
+  isOpen:              boolean;
+  onClose:             () => void;
+  onGroupAdded:        (group: GroupInfo) => void;
+  onGroupRenamed:      (groupId: string, newName: string) => void;
   /** Called after successfully leaving a group */
-  onGroupLeft:    (groupId: string) => void;
+  onGroupLeft:         (groupId: string) => void;
   /** Called after successfully deleting a group */
-  onGroupDeleted: (groupId: string) => void;
+  onGroupDeleted:      (groupId: string) => void;
   /** Navigate to the Profile page */
-  onOpenProfile:   () => void;
+  onOpenProfile:       () => void;
   /** Navigate to the Analytics page */
-  onOpenAnalytics: () => void;
+  onOpenAnalytics:     () => void;
   /** Navigate to the Feedback dashboard (dev tier only) */
-  onOpenFeedback?: () => void;
+  onOpenFeedback?:     () => void;
   /** Called after admin saves a new group default tax rate */
   onGroupTaxRateChanged: (groupId: string, rate: number | null) => void;
 }
@@ -207,6 +208,7 @@ export default function GroupSidebar({
   groups,
   activeGroupId,
   currentUserId,
+  currentUserName,
   onSelect,
   isOpen,
   onClose,
@@ -381,6 +383,10 @@ export default function GroupSidebar({
       setCreateError(error ?? t('common.error'));
     } else {
       setCreateName('');
+      // Auto-add creator as a linked named participant
+      if (currentUserName && currentUserId) {
+        void insertParticipant(data.id, currentUserName, currentUserId);
+      }
       handleGroupAdded(data);
       setAddJoinOpen(false);
     }
@@ -398,6 +404,10 @@ export default function GroupSidebar({
       setJoinError(error ?? t('common.error'));
     } else {
       setJoinCode('');
+      // Auto-add joiner as a linked named participant
+      if (currentUserName && currentUserId) {
+        void insertParticipant(data.id, currentUserName, currentUserId);
+      }
       handleGroupAdded(data);
       setAddJoinOpen(false);
     }

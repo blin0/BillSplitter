@@ -11,14 +11,20 @@ import DescriptionComboBox from './DescriptionComboBox';
 import ParticipantSelect from './ParticipantSelect';
 
 interface Props {
-  participants:  Participant[];
-  onAdd:         (expense: Expense) => void;
-  groupId?:      string;
-  groupTaxRate?: number | null;
-  limitReached?: boolean;
-  monthlyCount?: number;
-  monthlyLimit?: number | null;
-  onUpgrade?:    () => void;
+  participants:    Participant[];
+  onAdd:           (expense: Expense) => void;
+  /** When provided, the form initialises in edit mode for this expense. */
+  initialExpense?: Expense;
+  /** Called instead of onAdd when saving an edit. */
+  onSave?:         (expense: Expense) => void;
+  /** Called when the user cancels an edit. */
+  onCancel?:       () => void;
+  groupId?:        string;
+  groupTaxRate?:   number | null;
+  limitReached?:   boolean;
+  monthlyCount?:   number;
+  monthlyLimit?:   number | null;
+  onUpgrade?:      () => void;
 }
 
 function makeId() {
@@ -34,6 +40,18 @@ function getDefaultDesc(userId?: string): string {
     const p = JSON.parse(localStorage.getItem(`bsp_descs_${userId}`) ?? 'null') as { defaultLabel?: string | null } | null;
     return p?.defaultLabel ?? '';
   } catch { return ''; }
+}
+
+/** Returns the next "Mystery N" name for a group and increments the counter. */
+function nextMysteryName(groupId?: string): string {
+  const key = `bsp_mystery_${groupId ?? 'guest'}`;
+  try {
+    const n = (parseInt(localStorage.getItem(key) ?? '0', 10) || 0) + 1;
+    localStorage.setItem(key, String(n));
+    return `Mystery ${n}`;
+  } catch {
+    return 'Mystery 1';
+  }
 }
 
 function getDefaultPaidBy(userId?: string, groupId?: string, parts?: Participant[]): string {
@@ -66,10 +84,12 @@ function getInheritedTax(
   return { rate: 0, source: null };
 }
 
-export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate, limitReached = false, monthlyCount, monthlyLimit, onUpgrade }: Props) {
+export default function ExpenseForm({ participants, onAdd, initialExpense, onSave, onCancel, groupId, groupTaxRate, limitReached = false, monthlyCount, monthlyLimit, onUpgrade }: Props) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { currency, formatPrice, convert, ratesLoading, ratesError } = useCurrency();
+
+  const editMode = !!initialExpense;
 
   const [description, setDescription]         = useState('');
   const [amount, setAmount]                   = useState('');
@@ -92,6 +112,7 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
   const taxRef    = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const longPressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const editInitialized = useRef(false);
 
   /** Nudge the amount by `delta`. Clamps to 0. */
   const nudge = useCallback((delta: number) => {
@@ -121,15 +142,67 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
   // Clean up on unmount
   useEffect(() => () => stopLongPress(), []);
 
-  useEffect(() => { setSourceCurrency(currency); setIsManualRate(false); }, [currency]);
+  useEffect(() => {
+    if (editMode) return;
+    setSourceCurrency(currency);
+    setIsManualRate(false);
+  }, [currency]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setIsManualRate(false); }, [sourceCurrency]);
-  useEffect(() => { setInvolved(new Set(participants.map(p => p.id))); }, [participants]);
+  useEffect(() => {
+    if (editMode) return;
+    setInvolved(new Set(participants.map(p => p.id)));
+  }, [participants]); // eslint-disable-line react-hooks/exhaustive-deps
   // Auto-focus tax input when section opens
   useEffect(() => { if (showFees) setTimeout(() => taxRef.current?.focus(), 50); }, [showFees]);
 
-  // Apply inherited tax (group → user → 0) when user or group context changes
+  // Initialise edit mode state from the provided expense (runs once per expense id)
+  useEffect(() => {
+    if (!initialExpense || editInitialized.current) return;
+    editInitialized.current = true;
+    setDescription(initialExpense.description);
+    setAmount(String(initialExpense.sourceAmount));
+    setSourceCurrency(initialExpense.sourceCurrency);
+    setPaidBy(initialExpense.paidBy);
+    setSplitType(initialExpense.splitType);
+    setInvolved(new Set(initialExpense.involvedParticipants));
+    if (initialExpense.taxPercent && initialExpense.taxPercent > 0) {
+      setTaxInput(String(initialExpense.taxPercent));
+      setShowFees(true);
+    }
+    if (initialExpense.tipSourceAmount && initialExpense.tipSourceAmount > 0) {
+      setTipInput(String(initialExpense.tipSourceAmount));
+      setShowFees(true);
+    }
+    if (initialExpense.splitType === 'exact') {
+      const amounts: Record<string, string> = {};
+      if (initialExpense.exactAmountsSource) {
+        for (const [id, amt] of Object.entries(initialExpense.exactAmountsSource)) {
+          amounts[id] = String(amt);
+        }
+      } else {
+        // Fallback: reverse-convert split shares to source amounts
+        for (const split of initialExpense.splits) {
+          if (initialExpense.involvedParticipants.includes(split.participantId)) {
+            const srcAmt = initialExpense.lockedRate > 0
+              ? round2(split.share / initialExpense.lockedRate)
+              : split.share;
+            amounts[split.participantId] = String(srcAmt);
+          }
+        }
+      }
+      setExactAmounts(amounts);
+    }
+    // Restore locked exchange rate for foreign expenses
+    if (initialExpense.sourceCurrency !== currency && initialExpense.lockedRate > 0 && initialExpense.lockedRate !== 1) {
+      setIsManualRate(true);
+      setManualRateInput(String(round4(1 / initialExpense.lockedRate)));
+    }
+  }, [initialExpense?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply inherited tax (group → user → 0) when user or group context changes — skipped in edit mode
   const taxContextKey = useRef<string | null>(null);
   useEffect(() => {
+    if (editMode) return;
     const key = `${user?.id ?? ''}_${groupId ?? ''}_${groupTaxRate ?? ''}`;
     if (taxContextKey.current === key) return;
     taxContextKey.current = key;
@@ -145,19 +218,19 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
     }
   }, [user?.id, groupId, groupTaxRate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply stored default description once when user becomes available
+  // Apply stored default description once when user becomes available — skipped in edit mode
   const descDefaultApplied = useRef(false);
   useEffect(() => {
-    if (descDefaultApplied.current || !user?.id || description !== '') return;
+    if (editMode || descDefaultApplied.current || !user?.id || description !== '') return;
     descDefaultApplied.current = true;
     const def = getDefaultDesc(user.id);
     if (def) setDescription(def);
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply stored default paidBy once when participants load
+  // Apply stored default paidBy once when participants load — skipped in edit mode
   const paidByDefaultApplied = useRef(false);
   useEffect(() => {
-    if (paidByDefaultApplied.current || paidBy !== '' || participants.length === 0 || !user?.id || !groupId) return;
+    if (editMode || paidByDefaultApplied.current || paidBy !== '' || participants.length === 0 || !user?.id || !groupId) return;
     paidByDefaultApplied.current = true;
     const def = getDefaultPaidBy(user.id, groupId, participants);
     if (def) setPaidBy(def);
@@ -271,6 +344,15 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
       const subtotalSum = round2(involvedList.reduce(
         (s, p) => s + srcToBase(parseFloat(exactAmounts[p.id] || '0') || 0), 0
       ));
+      // Allow $0 exact splits (e.g. recording a free shared event)
+      if (subtotalSum <= 0 && lockedGrandTotal <= 0) {
+        return involvedList.map(p => ({
+          participantId: p.id,
+          share:         0,
+          paidAmount:    0,
+          isSettled:     p.id === paidBy,
+        }));
+      }
       if (subtotalSum <= 0) return null;
 
       let allocated = 0;
@@ -301,8 +383,6 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
 
   function handleSubmit() {
     setError('');
-    if (!description.trim())       { setError(t('expense.errorNoDesc')); triggerShake(); return; }
-    if (sourceSubtotal <= 0)       { setError(t('expense.errorNoAmount')); triggerShake(); return; }
     if (!paidBy)                   { setError(t('expense.errorNoPayer')); triggerShake(); return; }
     if (n === 0)                   { setError(t('expense.errorNoParticipants')); return; }
     if (isForeign && ratesLoading && !isManualRate) {
@@ -318,7 +398,7 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
     const lockedTipBase      = hasFees ? (isForeign ? round2(sourceTip * lockedRate) : sourceTip) : 0;
     const lockedGrandTotal   = round2(lockedBaseSubtotal + lockedTaxBase + lockedTipBase);
 
-    if (splitType === 'exact') {
+    if (splitType === 'exact' && sourceSubtotal > 0) {
       const sum = exactSumSource();
       if (Math.abs(sum - sourceSubtotal) > 0.01) {
         setError(t('expense.errorExactSum', {
@@ -333,9 +413,37 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
     const splits = buildSplits(lockedBaseSubtotal, lockedGrandTotal);
     if (!splits) { setError(t('expense.errorNoParticipants')); return; }
 
+    // Use entered description, or auto-assign a mystery name
+    const finalDescription = description.trim() || nextMysteryName(groupId);
+
+    const exactAmountsSource: Record<string, number> | undefined =
+      splitType === 'exact'
+        ? Object.fromEntries(involvedList.map(p => [p.id, parseFloat(exactAmounts[p.id] || '0') || 0]))
+        : undefined;
+
+    if (editMode && onSave && initialExpense) {
+      onSave({
+        ...initialExpense,
+        description:          finalDescription,
+        totalAmount:          lockedGrandTotal,
+        sourceAmount:         sourceSubtotal,
+        sourceCurrency,
+        lockedRate,
+        paidBy,
+        splitType,
+        involvedParticipants: involvedList.map(p => p.id),
+        splits,
+        isHighlighted:        false,
+        taxPercent:            hasFees && taxPercent > 0 ? taxPercent : undefined,
+        tipSourceAmount:       hasFees && sourceTip > 0 ? sourceTip : undefined,
+        exactAmountsSource,
+      });
+      return;
+    }
+
     onAdd({
       id: makeId(),
-      description: description.trim(),
+      description: finalDescription,
       totalAmount: lockedGrandTotal,
       sourceAmount: sourceSubtotal,
       sourceCurrency,
@@ -347,6 +455,7 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
       isHighlighted: false,
       taxPercent: hasFees && taxPercent > 0 ? taxPercent : undefined,
       tipSourceAmount: hasFees && sourceTip > 0 ? sourceTip : undefined,
+      exactAmountsSource,
     });
 
     setDescription(getDefaultDesc(user?.id));
@@ -370,7 +479,21 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4">{t('expense.addExpense')}</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
+          {editMode ? t('expense.editExpense') : t('expense.addExpense')}
+        </h2>
+        {editMode && onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="p-1.5 rounded-lg text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label={t('common.cancel')}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
 
       <div className="space-y-3">
         <DescriptionComboBox
@@ -379,6 +502,7 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
           nextRef={amountRef}
           onCommit={handleSubmit}
           storageKey={user?.id}
+          openOnFocus={!editMode}
         />
 
         {/* ── Unified Control Bar ── */}
@@ -857,7 +981,7 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
 
         {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
 
-        {limitReached ? (
+        {!editMode && limitReached ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
               <Lock size={13} className="text-amber-500 shrink-0" />
@@ -872,6 +996,25 @@ export default function ExpenseForm({ participants, onAdd, groupId, groupTaxRate
             >
               <Sparkles size={15} />
               Upgrade to Pro — Unlimited Expenses
+            </button>
+          </div>
+        ) : editMode ? (
+          <div className="flex gap-2">
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+            )}
+            <button
+              onClick={handleSubmit}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              <Check size={16} />
+              {t('expense.saveChanges')}
             </button>
           </div>
         ) : (

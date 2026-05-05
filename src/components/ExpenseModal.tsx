@@ -5,19 +5,21 @@ import type { Expense, Participant } from '../types';
 import ExpenseForm from './ExpenseForm';
 
 interface Props {
-  isOpen:        boolean;
-  onClose:       () => void;
-  participants:  Participant[];
-  onAdd:         (expense: Expense) => void;
-  groupId?:      string;
-  groupTaxRate?: number | null;
-  limitReached?: boolean;
-  monthlyCount?: number;
-  monthlyLimit?: number | null;
-  onUpgrade?:    () => void;
+  isOpen:          boolean;
+  onClose:         () => void;
+  participants:    Participant[];
+  onAdd:           (expense: Expense) => void;
+  initialExpense?: Expense;
+  onSave?:         (expense: Expense) => void;
+  groupId?:        string;
+  groupTaxRate?:   number | null;
+  limitReached?:   boolean;
+  monthlyCount?:   number;
+  monthlyLimit?:   number | null;
+  onUpgrade?:      () => void;
 }
 
-export default function ExpenseModal({ isOpen, onClose, participants, onAdd, groupId, groupTaxRate, limitReached, monthlyCount, monthlyLimit, onUpgrade }: Props) {
+export default function ExpenseModal({ isOpen, onClose, participants, onAdd, initialExpense, onSave, groupId, groupTaxRate, limitReached, monthlyCount, monthlyLimit, onUpgrade }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-focus the first input (description) when the modal opens
@@ -45,12 +47,17 @@ export default function ExpenseModal({ isOpen, onClose, participants, onAdd, gro
     onClose();
   }
 
+  function handleSaved(expense: Expense) {
+    onSave?.(expense);
+    onClose();
+  }
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Add expense"
+      aria-label={initialExpense ? 'Edit expense' : 'Add expense'}
     >
       {/* Backdrop */}
       <div
@@ -65,18 +72,23 @@ export default function ExpenseModal({ isOpen, onClose, participants, onAdd, gro
         className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl ring-1 ring-white/10 shadow-2xl shadow-black/60"
         onClick={e => e.stopPropagation()}
       >
-        {/* Close button (top-right, above the form card) */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
-          aria-label="Close modal"
-        >
-          <X size={16} />
-        </button>
+        {/* Close button — only in add mode; edit mode has its own X in the form header */}
+        {!initialExpense && (
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+            aria-label="Close modal"
+          >
+            <X size={16} />
+          </button>
+        )}
 
         <ExpenseForm
           participants={participants}
           onAdd={handleAdded}
+          initialExpense={initialExpense}
+          onSave={initialExpense ? handleSaved : undefined}
+          onCancel={onClose}
           groupId={groupId}
           groupTaxRate={groupTaxRate}
           limitReached={limitReached}

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Trash2, Info, CheckCircle2, MousePointerClick, ListChecks, Search, X } from 'lucide-react';
+import { Trash2, Pencil, Info, CheckCircle2, MousePointerClick, ListChecks, Search, X, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Expense, Participant } from '../types';
 import { useCurrency } from '../context/CurrencyContext';
 import { round2 } from '../utils/calculations';
 import { cn } from '../lib/cn';
+import { relativeTime } from '../utils/relativeTime';
 
 interface Props {
   expenses: Expense[];
@@ -12,6 +13,7 @@ interface Props {
   onRemove: (id: string) => void;
   onToggleHighlight: (id: string) => void;
   onSelectAllUnsettled: () => void;
+  onEdit?: (expense: Expense) => void;
   readOnly?: boolean;
 }
 
@@ -21,6 +23,7 @@ export default function ExpenseList({
   onRemove,
   onToggleHighlight,
   onSelectAllUnsettled,
+  onEdit,
   readOnly = false,
 }: Props) {
   const { formatPrice, currency } = useCurrency();
@@ -180,6 +183,12 @@ export default function ExpenseList({
                       {e.tipSourceAmount ? <span> · <span className="text-teal-500 dark:text-teal-400">{e.tipSourceAmount} {e.sourceCurrency} {t('expense.tip')}</span></span> : null}
                     </p>
                   )}
+                  {e.date && (
+                    <p className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-400 dark:text-slate-500">
+                      <Clock size={9} className="shrink-0" />
+                      {relativeTime(e.date, t)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 ml-3 shrink-0">
@@ -211,6 +220,15 @@ export default function ExpenseList({
                     </div>
                   )}
 
+                  {!readOnly && !fullySettled && !e.splits.some(s => s.isSettled && s.participantId !== e.paidBy) && onEdit && (
+                    <button
+                      onClick={ev => { ev.stopPropagation(); onEdit(e); }}
+                      className="text-gray-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 transition-all hover:scale-110 active:scale-90"
+                      aria-label="Edit expense"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
                   {!readOnly && (
                     <button
                       onClick={ev => { ev.stopPropagation(); onRemove(e.id); }}

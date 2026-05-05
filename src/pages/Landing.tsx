@@ -1522,7 +1522,12 @@ export default function Landing() {
           <img src="/favicon.svg" alt="" className="w-5 h-5 opacity-50" />
           <span className="font-semibold text-slate-500">Axiom Splits</span>
         </div>
-        <p>{t('landing.footer.copyright', { year: new Date().getFullYear() })}</p>
+        <p className="mb-3">{t('landing.footer.copyright', { year: new Date().getFullYear() })}</p>
+        <div className="flex items-center justify-center gap-4">
+          <a href="/terms" className="text-slate-600 hover:text-slate-400 transition-colors">Terms of Service</a>
+          <span className="text-slate-700">·</span>
+          <a href="/privacy" className="text-slate-600 hover:text-slate-400 transition-colors">Privacy Policy</a>
+        </div>
       </footer>
     </div>
   );
