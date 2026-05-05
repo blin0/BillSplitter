@@ -223,9 +223,6 @@ function AppInner() {
   const [removedNotice,  setRemovedNotice ] = useState<string | null>(null);
   const [joinNotices,    setJoinNotices   ] = useState<{ id: string; text: string }[]>([]);
   const [roleNotices,    setRoleNotices   ] = useState<{ id: string; text: string; promoted: boolean }[]>([]);
-  // Identity: which named_participant the current user has claimed as "me" in the active group
-  const [linkedMemberId, setLinkedMemberId] = useState<string | null>(null);
-
   // Realtime sync — keep all group members in lockstep
   useGroupSync(
     user ? activeGroupId : null,
@@ -730,20 +727,6 @@ function AppInner() {
 
   function nameOf(id: string) {
     return participants.find(p => p.id === id)?.name ?? id;
-  }
-
-  // ── Identity link handlers ─────────────────────────────────────────────────
-
-  async function handleLink(memberId: string) {
-    if (!activeGroupId) return;
-    const { error } = await setMemberLink(activeGroupId, memberId);
-    if (!error) setLinkedMemberId(memberId);
-  }
-
-  async function handleUnlink() {
-    if (!activeGroupId) return;
-    const { error } = await deleteMemberLink(activeGroupId);
-    if (!error) setLinkedMemberId(null);
   }
 
   function settleDebt(from: string, to: string, amount: number) {
