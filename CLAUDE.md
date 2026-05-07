@@ -2,10 +2,11 @@
 
 ## Commands
 ```bash
-npm run dev      # Start dev server (http://localhost:5173)
+npm run dev      # Start dev server (http://localhost:5174)
 npm run build    # Type-check (tsc -b) then Vite production build
 npm run lint     # ESLint flat config
 npm run preview  # Preview production build locally
+npm test         # Run vitest test suite (src/test/)
 ```
 
 ## Architecture
@@ -71,3 +72,35 @@ src/
 |-----|---------|-----|
 | `billsplitter_currency` | User's group base currency | permanent |
 | `billsplitter_rates_v1` | Exchange rate cache | 24 hours |
+
+## Keep the .md file current - update as new info comes in
+Whenever new information surfaces during a session, the relevant '.md' file must be updated. Don't let facts slip through.
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+
+## Testing
+
+Framework: **vitest** | Test dir: `src/test/` | Run: `npm test`
+See [TESTING.md](TESTING.md) for conventions.
+
+- Write a test for every new function
+- Write a regression test for every bug fix
+- Test both branches of every conditional
+- Never commit code that makes tests fail
+- Mock all external services (Supabase, Stripe, Frankfurter) in tests
+- Resume context → invoke /context-restore

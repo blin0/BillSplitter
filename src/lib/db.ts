@@ -36,6 +36,7 @@ export interface GroupInfo {
   joinCode:       string;
   role:           'admin' | 'editor' | 'viewer';
   defaultTaxRate: number | null;
+  icon:           string | null;
 }
 
 export interface GroupMemberInfo {
@@ -268,7 +269,7 @@ export async function fetchUserGroups(): Promise<DbResult<GroupInfo[]>> {
 
   const { data, error } = await supabase
     .from('members')
-    .select('role, groups(id, name, join_code, default_tax_rate)')
+    .select('role, groups(id, name, join_code, default_tax_rate, icon)')
     .eq('user_id', user.id);
 
   if (error) return { data: null, error: error.message };
@@ -279,11 +280,11 @@ export async function fetchUserGroups(): Promise<DbResult<GroupInfo[]>> {
   const seen = new Map<string, GroupInfo>();
   for (const row of data ?? []) {
     if (!row.groups) continue;
-    const g = row.groups as { id: string; name: string; join_code: string; default_tax_rate: number | null };
+    const g = row.groups as unknown as { id: string; name: string; join_code: string; default_tax_rate: number | null; icon: string | null };
     const role = row.role as 'admin' | 'editor' | 'viewer';
     const existing = seen.get(g.id);
     if (!existing || (ROLE_RANK[role] ?? 0) > (ROLE_RANK[existing.role] ?? 0)) {
-      seen.set(g.id, { id: g.id, name: g.name, joinCode: g.join_code, role, defaultTaxRate: g.default_tax_rate ?? null });
+      seen.set(g.id, { id: g.id, name: g.name, joinCode: g.join_code, role, defaultTaxRate: g.default_tax_rate ?? null, icon: g.icon ?? null });
     }
   }
 
@@ -307,9 +308,19 @@ export async function createGroup(name: string): Promise<DbResult<GroupInfo>> {
       joinCode:       row.join_code,
       role:           'admin',
       defaultTaxRate: null,
+      icon:           null,
     },
     error: null,
   };
+}
+
+/** Update a group's icon (a Lucide icon name or a base64 data URL). */
+export async function updateGroupIcon(groupId: string, icon: string | null): Promise<DbResult<void>> {
+  const { error } = await (supabase as any)
+    .from('groups')
+    .update({ icon })
+    .eq('id', groupId);
+  return { data: null, error: error?.message ?? null };
 }
 
 /**
@@ -380,14 +391,14 @@ export async function joinGroupByCode(code: string): Promise<DbResult<GroupInfo>
 
   const { data: memberRow, error: mErr } = await supabase
     .from('members')
-    .select('role, groups(id, name, join_code, default_tax_rate)')
+    .select('role, groups(id, name, join_code, default_tax_rate, icon)')
     .eq('group_id', groupId as string)
     .eq('user_id', user.id)
     .single();
 
   if (mErr) return { data: null, error: mErr.message };
 
-  const g = memberRow.groups as { id: string; name: string; join_code: string; default_tax_rate: number | null };
+  const g = memberRow.groups as unknown as { id: string; name: string; join_code: string; default_tax_rate: number | null; icon: string | null };
   return {
     data: {
       id:             g.id,
@@ -395,6 +406,7 @@ export async function joinGroupByCode(code: string): Promise<DbResult<GroupInfo>
       joinCode:       g.join_code,
       role:           memberRow.role as 'admin' | 'editor' | 'viewer',
       defaultTaxRate: g.default_tax_rate ?? null,
+      icon:           g.icon ?? null,
     },
     error: null,
   };
@@ -846,6 +858,46 @@ export async function syncSplitsForExpense(
 
   const firstError = results.find(r => r.error)?.error;
   return { data: null, error: firstError?.message ?? null };
+}
+
+// ─── Participant avatar map ───────────────────────────────────────────────────
+
+/**
+ * For a group, returns { [named_participant_id]: avatar_url } for every member
+ * who has linked their account. Only includes participants that have a non-null
+ * avatar_url so callers can safely fall back to the letter icon for missing keys.
+ */
+export async function fetchParticipantAvatars(
+  groupId: string,
+): Promise<DbResult<Record<string, string>>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: links, error: linksErr } = await (supabase as any)
+    .from('user_member_links')
+    .select('member_id, user_id')
+    .eq('group_id', groupId);
+
+  if (linksErr) return { data: null, error: linksErr.message };
+  const typedLinks = (links ?? []) as { member_id: string; user_id: string }[];
+  if (typedLinks.length === 0) return { data: {}, error: null };
+
+  const { data: profiles, error: profErr } = await supabase
+    .from('profiles')
+    .select('id, avatar_url')
+    .in('id', typedLinks.map(l => l.user_id));
+
+  if (profErr) return { data: null, error: profErr.message };
+
+  const profileMap = new Map(
+    (profiles ?? []).map(p => [p.id, p.avatar_url ?? null]),
+  );
+
+  const result: Record<string, string> = {};
+  for (const { member_id, user_id } of typedLinks) {
+    const url = profileMap.get(user_id);
+    if (url) result[member_id] = url;
+  }
+
+  return { data: result, error: null };
 }
 
 // ─── User–member identity links ───────────────────────────────────────────────
