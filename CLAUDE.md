@@ -2,10 +2,11 @@
 
 ## Commands
 ```bash
-npm run dev      # Start dev server (http://localhost:5173)
+npm run dev      # Start dev server (http://localhost:5174)
 npm run build    # Type-check (tsc -b) then Vite production build
 npm run lint     # ESLint flat config
 npm run preview  # Preview production build locally
+npm test         # Run vitest test suite (src/test/)
 ```
 
 ## Architecture
@@ -91,4 +92,15 @@ Key routing rules:
 - Visual polish → invoke /design-review
 - Ship/deploy/PR → invoke /ship or /land-and-deploy
 - Save progress → invoke /context-save
+
+## Testing
+
+Framework: **vitest** | Test dir: `src/test/` | Run: `npm test`
+See [TESTING.md](TESTING.md) for conventions.
+
+- Write a test for every new function
+- Write a regression test for every bug fix
+- Test both branches of every conditional
+- Never commit code that makes tests fail
+- Mock all external services (Supabase, Stripe, Frankfurter) in tests
 - Resume context → invoke /context-restore
