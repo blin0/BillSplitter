@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent, MessageSquare } from 'lucide-react';
+import { Reorder } from 'framer-motion';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent, MessageSquare, Upload, ImagePlus, GripVertical } from 'lucide-react';
+import { GroupIconDisplay, GROUP_ICON_DEFS } from '../lib/groupIcons';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import type { GroupInfo, GroupMemberInfo } from '../lib/db';
-import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, fetchGroupMemberCount, createGroup, joinGroupByCode, insertParticipant } from '../lib/db';
+import { fetchGroupMembers, updateMemberRole, removeMember, updateGroupName, updateGroupTaxRate, leaveGroup, deleteGroupPermanently, fetchOwnGroupCount, fetchGroupMemberCount, createGroup, joinGroupByCode, insertParticipant, updateGroupIcon } from '../lib/db';
 import { useCurrency } from '../context/CurrencyContext';
 import { useSubscriptionContext } from '../context/SubscriptionContext';
 import { groupLimit, memberLimit, nextTierName } from '../lib/hasAccess';
@@ -32,6 +34,8 @@ interface Props {
   onOpenFeedback?:     () => void;
   /** Called after admin saves a new group default tax rate */
   onGroupTaxRateChanged: (groupId: string, rate: number | null) => void;
+  /** Called after the group icon is changed */
+  onGroupIconChanged?: (groupId: string, icon: string | null) => void;
 }
 
 // ─── Role metadata ────────────────────────────────────────────────────────────
@@ -204,6 +208,39 @@ function RemoveConfirmModal({
 
 type ConfirmAction = 'leave' | 'delete';
 
+function applyStoredOrder(groups: GroupInfo[], userId: string | null): GroupInfo[] {
+  if (!userId || groups.length === 0) return groups;
+  try {
+    const saved = localStorage.getItem(`billsplitter_group_order_${userId}`);
+    if (!saved) return groups;
+    const ids: string[] = JSON.parse(saved);
+    const byId = new Map(groups.map(g => [g.id, g]));
+    const ordered = ids.flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
+    const remaining = groups.filter(g => !ids.includes(g.id));
+    return [...ordered, ...remaining];
+  } catch {
+    return groups;
+  }
+}
+
+function resizeImageToDataUrl(file: File, size = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+      const s = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export default function GroupSidebar({
   groups,
   activeGroupId,
@@ -220,6 +257,7 @@ export default function GroupSidebar({
   onOpenAnalytics,
   onOpenFeedback,
   onGroupTaxRateChanged,
+  onGroupIconChanged,
 }: Props) {
   const { t } = useTranslation();
   const location       = useLocation();
@@ -239,7 +277,45 @@ export default function GroupSidebar({
   const [confirmAction,   setConfirmAction  ] = useState<ConfirmAction | null>(null);
   const [confirmLoading,  setConfirmLoading ] = useState(false);
   const [confirmError,    setConfirmError   ] = useState<string | null>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef   = useRef<HTMLInputElement>(null);
+  const iconPickerRef    = useRef<HTMLDivElement>(null);
+  const iconFileInputRef = useRef<HTMLInputElement>(null);
+  const [iconPickerGroupId, setIconPickerGroupId] = useState<string | null>(null);
+  const [iconPickerSaving,  setIconPickerSaving ] = useState(false);
+
+  // Ordered group list — initialized from groups prop + localStorage
+  const [orderedGroups, setOrderedGroups] = useState<GroupInfo[]>(() =>
+    applyStoredOrder(groups, currentUserId)
+  );
+
+  // When groups prop changes (icon/name update, add, remove), keep custom order but sync data
+  useEffect(() => {
+    setOrderedGroups(prev => {
+      if (prev.length === 0 && groups.length > 0) {
+        return applyStoredOrder(groups, currentUserId);
+      }
+      const byId = new Map(groups.map(g => [g.id, g]));
+      const validPrev = prev.filter(p => byId.has(p.id)).map(p => byId.get(p.id)!);
+      const newGroups  = groups.filter(g => !prev.some(p => p.id === g.id));
+      return [...validPrev, ...newGroups];
+    });
+  }, [groups]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When user changes, reload stored order for the new user
+  useEffect(() => {
+    setOrderedGroups(applyStoredOrder(groups, currentUserId));
+  }, [currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleReorder(newOrder: GroupInfo[]) {
+    setOrderedGroups(newOrder);
+    if (!currentUserId) return;
+    try {
+      localStorage.setItem(
+        `billsplitter_group_order_${currentUserId}`,
+        JSON.stringify(newOrder.map(g => g.id)),
+      );
+    } catch (_) {}
+  }
 
   // ── Group tax rate state ──────────────────────────────────────────────────
   const [taxOpen,       setTaxOpen      ] = useState(false);
@@ -309,6 +385,7 @@ export default function GroupSidebar({
   function handleSelect(id: string) {
     onSelect(id);
     setMembersOpen(false);
+    setIconPickerGroupId(null);
     onClose();
   }
 
@@ -461,6 +538,38 @@ export default function GroupSidebar({
     return t('sidebar.roleViewer');
   }
 
+  // Close icon picker when clicking outside it
+  useEffect(() => {
+    if (!iconPickerGroupId) return;
+    function handle(e: MouseEvent) {
+      if (iconPickerRef.current && !iconPickerRef.current.contains(e.target as Node)) {
+        setIconPickerGroupId(null);
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [iconPickerGroupId]);
+
+  async function handlePickIcon(groupId: string, icon: string | null) {
+    setIconPickerSaving(true);
+    const { error } = await updateGroupIcon(groupId, icon);
+    setIconPickerSaving(false);
+    if (!error) {
+      onGroupIconChanged?.(groupId, icon);
+      setIconPickerGroupId(null);
+    }
+  }
+
+  async function handleIconUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !iconPickerGroupId) return;
+    e.target.value = '';
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      await handlePickIcon(iconPickerGroupId, dataUrl);
+    } catch { /* ignore upload errors */ }
+  }
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -517,66 +626,180 @@ export default function GroupSidebar({
                 {groups.length === 0 ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">{t('sidebar.noGroups')}</p>
                 ) : (
-                  <nav className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                    {groups.map(group => {
+                  <Reorder.Group
+                    as="nav"
+                    axis="y"
+                    values={orderedGroups}
+                    onReorder={handleReorder}
+                    className="divide-y divide-gray-100 dark:divide-slate-700/60"
+                  >
+                    {orderedGroups.map(group => {
                       const isAdminOfGroup = group.role === 'admin';
                       const isEditing      = editingGroupId === group.id;
-
-                      if (isEditing) {
-                        return (
-                          <div
-                            key={group.id}
-                            className="flex items-center gap-2 px-3 py-2.5 bg-violet-50 dark:bg-violet-900/30"
-                          >
-                            <input
-                              ref={renameInputRef}
-                              value={editingName}
-                              onChange={e => setEditingName(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter')  { e.preventDefault(); commitRename(); }
-                                if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
-                              }}
-                              onBlur={commitRename}
-                              maxLength={50}
-                              className={cn(
-                                'flex-1 min-w-0 bg-transparent text-sm font-medium',
-                                'text-violet-700 dark:text-violet-300',
-                                'border-b border-violet-300 dark:border-violet-600',
-                                'outline-none focus:border-violet-500 dark:focus:border-violet-400',
-                              )}
-                            />
-                            <span className="shrink-0 text-[10px] text-violet-400 dark:text-violet-500 select-none">↵</span>
-                          </div>
-                        );
-                      }
+                      const isActive       = group.id === activeGroupId && !isProfilePage;
+                      const iconClass      = isActive ? 'text-violet-500 dark:text-violet-400' : 'text-gray-400 dark:text-slate-500';
+                      const showHandle     = orderedGroups.length > 1;
 
                       return (
-                        <button
+                        <Reorder.Item
                           key={group.id}
-                          onClick={() => handleSelect(group.id)}
-                          onDoubleClick={isAdminOfGroup ? () => startRename(group) : undefined}
-                          title={isAdminOfGroup ? 'Double-click to rename' : undefined}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors',
-                            group.id === activeGroupId && !isProfilePage
-                              ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium'
-                              : 'text-gray-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/60',
-                          )}
+                          value={group}
+                          as="div"
+                          onDragStart={() => setIconPickerGroupId(null)}
+                          className="flex items-stretch bg-gray-50 dark:bg-slate-800 select-none"
+                          style={{ listStyle: 'none' }}
                         >
-                          <span className="flex-1 truncate">{group.name}</span>
-                          <span className={cn(
-                            'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full',
-                            ROLE_BADGE_CLASS[group.role as Role] ?? ROLE_BADGE_CLASS.viewer,
-                          )}>
-                            {roleLabel(group.role)}
-                          </span>
-                          {group.id === activeGroupId && !isProfilePage && (
-                            <ChevronRight size={13} className="shrink-0 text-violet-400 dark:text-violet-500" />
+                          {/* Drag handle — only shown when 2+ groups */}
+                          {showHandle && !isEditing && (
+                            <div className="flex items-center px-1 touch-none cursor-grab active:cursor-grabbing text-gray-300 dark:text-slate-600 hover:text-gray-400 dark:hover:text-slate-500 transition-colors shrink-0 self-stretch">
+                              <GripVertical size={12} />
+                            </div>
                           )}
-                        </button>
+
+                          <div className="flex-1 min-w-0">
+                            {isEditing ? (
+                              <div className="flex items-center gap-2 px-3 py-2.5 bg-violet-50 dark:bg-violet-900/30">
+                                <input
+                                  ref={renameInputRef}
+                                  value={editingName}
+                                  onChange={e => setEditingName(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter')  { e.preventDefault(); commitRename(); }
+                                    if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+                                  }}
+                                  onBlur={commitRename}
+                                  maxLength={50}
+                                  className={cn(
+                                    'flex-1 min-w-0 bg-transparent text-sm font-medium',
+                                    'text-violet-700 dark:text-violet-300',
+                                    'border-b border-violet-300 dark:border-violet-600',
+                                    'outline-none focus:border-violet-500 dark:focus:border-violet-400',
+                                  )}
+                                />
+                                <span className="shrink-0 text-[10px] text-violet-400 dark:text-violet-500 select-none">↵</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleSelect(group.id)}
+                                onDoubleClick={isAdminOfGroup ? () => startRename(group) : undefined}
+                                title={isAdminOfGroup ? 'Double-click to rename' : undefined}
+                                className={cn(
+                                  'w-full flex items-center gap-2 py-2.5 text-left text-sm transition-colors',
+                                  showHandle ? 'pl-1 pr-3' : 'px-3',
+                                  isActive
+                                    ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium'
+                                    : 'text-gray-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/60',
+                                )}
+                              >
+                                {/* Icon zone — clickable for admins to change */}
+                                {isAdminOfGroup ? (
+                                  <span
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setIconPickerGroupId(prev => prev === group.id ? null : group.id);
+                                    }}
+                                    className="relative flex items-center justify-center w-[18px] h-[18px] rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0 group/icontrigger"
+                                    title="Change icon"
+                                  >
+                                    {group.icon ? (
+                                      <GroupIconDisplay icon={group.icon} size={14} className={iconClass} />
+                                    ) : (
+                                      <ImagePlus size={12} className="text-gray-300 dark:text-slate-600 group-hover/icontrigger:text-gray-500 dark:group-hover/icontrigger:text-slate-400 transition-colors" />
+                                    )}
+                                  </span>
+                                ) : (
+                                  <GroupIconDisplay icon={group.icon} size={15} className={iconClass} />
+                                )}
+                                <span className="flex-1 truncate">{group.name}</span>
+                                <span className={cn(
+                                  'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full',
+                                  ROLE_BADGE_CLASS[group.role as Role] ?? ROLE_BADGE_CLASS.viewer,
+                                )}>
+                                  {roleLabel(group.role)}
+                                </span>
+                                {isActive && (
+                                  <ChevronRight size={13} className="shrink-0 text-violet-400 dark:text-violet-500" />
+                                )}
+                              </button>
+                            )}
+
+                            {/* Inline icon picker panel */}
+                            {iconPickerGroupId === group.id && !isEditing && (
+                              <div ref={iconPickerRef} className="px-2 pb-2 border-t border-gray-100 dark:border-slate-700/40">
+                                <div className="rounded-xl bg-white dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 p-2.5 mt-2">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+                                      Change Icon
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setIconPickerGroupId(null)}
+                                      className="p-0.5 rounded text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-5 gap-1 mb-2">
+                                    {GROUP_ICON_DEFS.map(({ name, label, Icon }) => (
+                                      <button
+                                        key={name}
+                                        type="button"
+                                        title={label}
+                                        disabled={iconPickerSaving}
+                                        onClick={() => handlePickIcon(group.id, name)}
+                                        className={cn(
+                                          'flex items-center justify-center p-1.5 rounded-lg transition-colors disabled:opacity-40',
+                                          group.icon === name
+                                            ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 ring-1 ring-violet-400/40'
+                                            : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400',
+                                        )}
+                                      >
+                                        <Icon size={14} strokeWidth={1.5} />
+                                      </button>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      title="Upload image"
+                                      disabled={iconPickerSaving}
+                                      onClick={() => iconFileInputRef.current?.click()}
+                                      className={cn(
+                                        'flex items-center justify-center p-1.5 rounded-lg transition-colors disabled:opacity-40',
+                                        group.icon?.startsWith('data:')
+                                          ? 'bg-violet-100 dark:bg-violet-900/40 ring-1 ring-violet-400/40'
+                                          : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400',
+                                      )}
+                                    >
+                                      {group.icon?.startsWith('data:') ? (
+                                        <img src={group.icon} alt="custom" className="w-3.5 h-3.5 rounded-full object-cover" />
+                                      ) : (
+                                        <Upload size={14} strokeWidth={1.5} />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 h-4">
+                                    {iconPickerSaving && (
+                                      <Loader2 size={11} className="animate-spin text-violet-500 shrink-0" />
+                                    )}
+                                    {group.icon && !iconPickerSaving && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePickIcon(group.id, null)}
+                                        className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                      >
+                                        Remove icon
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Reorder.Item>
                       );
                     })}
-                  </nav>
+                  </Reorder.Group>
                 )}
               </div>
             )}
@@ -923,6 +1146,15 @@ export default function GroupSidebar({
           </div>
 
         </div>
+
+        {/* Hidden file input for icon upload */}
+        <input
+          ref={iconFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleIconUpload}
+        />
 
         {/* ── Footer (Analytics + Profile) ── */}
         <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 p-2 space-y-0.5">

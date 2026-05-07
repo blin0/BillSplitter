@@ -11,6 +11,7 @@ interface Props {
   totalSpending: number;
   settlements: Settlement[];
   expenses: Expense[];
+  participantAvatars?: Record<string, string>;
 }
 
 // ── Category detection ────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ const TOOLTIP_BASE = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function Dashboard({ participants, balances, totalSpending, settlements, expenses }: Props) {
+export default function Dashboard({ participants, balances, totalSpending, settlements, expenses, participantAvatars }: Props) {
   const { formatPrice } = useCurrency();
   const { t } = useTranslation();
 
@@ -191,14 +192,27 @@ export default function Dashboard({ participants, balances, totalSpending, settl
               >
                 {/* Left: avatar + name + spent */}
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
-                    isOwed ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
-                           : owes ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
-                           : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
-                  )}>
-                    {p.name[0].toUpperCase()}
-                  </div>
+                  {participantAvatars?.[p.id] ? (
+                    <img
+                      src={participantAvatars[p.id]}
+                      alt={p.name}
+                      className={cn(
+                        'w-7 h-7 rounded-full object-cover shrink-0 ring-2',
+                        isOwed ? 'ring-green-400/60 dark:ring-green-500/50'
+                               : owes ? 'ring-red-400/60 dark:ring-red-500/50'
+                               : 'ring-slate-300/60 dark:ring-slate-600/50',
+                      )}
+                    />
+                  ) : (
+                    <div className={cn(
+                      'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                      isOwed ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
+                             : owes ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
+                             : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400',
+                    )}>
+                      {p.name[0].toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <span className="text-sm font-medium text-gray-700 dark:text-slate-200 block truncate">{nameOf(p.id)}</span>
                     {totalSpent > 0 && (

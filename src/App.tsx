@@ -33,6 +33,7 @@ import ActivityLog from './components/ActivityLog';
 import ExpenseModal from './components/ExpenseModal';
 import FeedbackButton from './components/FeedbackButton';
 import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour';
+import OnboardingFlow from './components/OnboardingFlow';
 import Profile from './pages/Profile';
 import Analytics from './pages/Analytics';
 import Landing from './pages/Landing';
@@ -56,6 +57,7 @@ import {
   fetchMemberLink,
   setMemberLink,
   deleteMemberLink,
+  fetchParticipantAvatars,
   type GroupInfo,
 } from './lib/db';
 
@@ -178,6 +180,7 @@ function AppInner() {
   const [showSignIn,           setShowSignIn          ] = useState(false);
   const [sidebarOpen,          setSidebarOpen         ] = useState(false);
   const [showExpenseModal,     setShowExpenseModal    ] = useState(false);
+  const [showOnboardingModal,  setShowOnboardingModal ] = useState(false);
   const [editingExpense,       setEditingExpense      ] = useState<Expense | null>(null);
   const [linkedMemberId,       setLinkedMemberId      ] = useState<string | null>(null);
   const [desktopExpenseModal,  setDesktopExpenseModal ] = useState(() =>
@@ -220,9 +223,10 @@ function AppInner() {
   const [dbExpenses,     setDbExpenses    ] = useState<Expense[]>([]);
   const [groupsLoading,  setGroupsLoading ] = useState(false);
   const [dataLoading,    setDataLoading   ] = useState(false);
-  const [removedNotice,  setRemovedNotice ] = useState<string | null>(null);
-  const [joinNotices,    setJoinNotices   ] = useState<{ id: string; text: string }[]>([]);
-  const [roleNotices,    setRoleNotices   ] = useState<{ id: string; text: string; promoted: boolean }[]>([]);
+  const [removedNotice,      setRemovedNotice      ] = useState<string | null>(null);
+  const [joinNotices,        setJoinNotices         ] = useState<{ id: string; text: string }[]>([]);
+  const [roleNotices,        setRoleNotices         ] = useState<{ id: string; text: string; promoted: boolean }[]>([]);
+  const [participantAvatars, setParticipantAvatars  ] = useState<Record<string, string>>({});
   // Realtime sync — keep all group members in lockstep
   useGroupSync(
     user ? activeGroupId : null,
@@ -428,6 +432,17 @@ function AppInner() {
     return () => { cancelled = true; };
   }, [activeGroupId]);
 
+  // Refresh participant→avatar map whenever the group changes or user links/unlinks
+  useEffect(() => {
+    if (!activeGroupId) {
+      setParticipantAvatars({});
+      return;
+    }
+    fetchParticipantAvatars(activeGroupId).then(({ data }) => {
+      setParticipantAvatars(data ?? {});
+    });
+  }, [activeGroupId, linkedMemberId]);
+
   // ── Active state (whichever mode is live) ──────────────────────────────────
   const isSignedIn      = !!user;
   const participants    = isSignedIn ? dbParticipants : guestParticipants;
@@ -545,6 +560,10 @@ function AppInner() {
 
   function handleGroupTaxRateChanged(groupId: string, rate: number | null) {
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, defaultTaxRate: rate } : g));
+  }
+
+  function handleGroupIconChanged(groupId: string, icon: string | null) {
+    setGroups(prev => prev.map(g => g.id === groupId ? { ...g, icon } : g));
   }
 
   // Keep a stable ref so GroupRouteSync can call it without re-subscribing
@@ -778,6 +797,31 @@ function AppInner() {
 
   const noGroups = isSignedIn && !groupsLoading && groups.length === 0;
 
+  // ── Onboarding flow state ──────────────────────────────────────────────────
+  // null = not yet determined (waiting for groups to load)
+  // false = not dismissed (show onboarding)
+  // true  = dismissed (skip or already completed)
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user || groupsLoading) return;
+    try {
+      const seen = localStorage.getItem(`billsplitter_onboarding_seen_${user.id}`) === 'true';
+      setOnboardingDismissed(seen);
+    } catch {
+      setOnboardingDismissed(false);
+    }
+  }, [user?.id, groupsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const showOnboarding = noGroups && onboardingDismissed === false;
+
+  function dismissOnboarding() {
+    if (user) {
+      try { localStorage.setItem(`billsplitter_onboarding_seen_${user.id}`, 'true'); } catch (_) {}
+    }
+    setOnboardingDismissed(true);
+  }
+
   // ── Onboarding tour — must be called before any early return (Rules of Hooks)
   const tourReady = !authLoading && !isProfilePage && !noGroups && (!isSignedIn || (!!activeGroupId && !dbLoading));
   const { show: showTour, dismiss: dismissTour } = useOnboardingTour(tourReady);
@@ -813,6 +857,7 @@ function AppInner() {
           onOpenAnalytics={handleOpenAnalytics}
           onOpenFeedback={() => navigate('/feedback')}
           onGroupTaxRateChanged={handleGroupTaxRateChanged}
+          onGroupIconChanged={handleGroupIconChanged}
         />
       )}
 
@@ -845,20 +890,27 @@ function AppInner() {
               </button>
             )}
 
-            {/* Logo + title — clicking back on the profile page goes to dashboard */}
+            {/* Logo + title — clickable when signed in: back on special pages, home/onboarding on main */}
             <div
               className={`flex items-center gap-2 flex-1 min-w-0${
-                isProfilePage && isSignedIn
+                isSignedIn
                   ? ' cursor-pointer rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors -ml-1 px-1 py-0.5'
                   : ''
               }`}
-              onClick={isProfilePage && isSignedIn ? () => navigate(-1) : undefined}
-              role={isProfilePage && isSignedIn ? 'button' : undefined}
-              tabIndex={isProfilePage && isSignedIn ? 0 : undefined}
-              onKeyDown={isProfilePage && isSignedIn
-                ? (e) => { if (e.key === 'Enter' || e.key === ' ') navigate(-1); }
+              onClick={isSignedIn ? () => {
+                if (isProfilePage || isAnalyticsPage || isFeedbackPage) navigate(-1);
+                else setShowOnboardingModal(true);
+              } : undefined}
+              role={isSignedIn ? 'button' : undefined}
+              tabIndex={isSignedIn ? 0 : undefined}
+              onKeyDown={isSignedIn
+                ? (e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    if (isProfilePage || isAnalyticsPage || isFeedbackPage) navigate(-1);
+                    else setShowOnboardingModal(true);
+                  }
                 : undefined}
-              aria-label={isProfilePage && isSignedIn ? 'Back to dashboard' : undefined}
+              aria-label={isSignedIn ? (isProfilePage || isAnalyticsPage || isFeedbackPage ? 'Back' : 'Home') : undefined}
             >
               <img src="/favicon.svg" alt="Axiom Splits" className="w-9 h-9 shrink-0" />
 
@@ -1035,8 +1087,8 @@ function AppInner() {
             </div>
           )}
 
-          {/* ── No-groups welcome state ── */}
-          {noGroups && (
+          {/* ── No-groups welcome state (shown after user dismisses onboarding) ── */}
+          {noGroups && onboardingDismissed === true && (
             <div className="flex items-center justify-center min-h-[calc(100dvh-73px)] px-4 py-12">
               <div className="w-full max-w-md">
 
@@ -1174,6 +1226,7 @@ function AppInner() {
                       totalSpending={total}
                       settlements={settlements}
                       expenses={expenses}
+                      participantAvatars={participantAvatars}
                     />
                   </div>
                   <div className="order-4" data-tour="settlement">
@@ -1218,6 +1271,20 @@ function AppInner() {
       )}
 
       {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
+
+      {(showOnboarding || showOnboardingModal) && (
+        <OnboardingFlow
+          onSkip={() => {
+            if (showOnboarding) dismissOnboarding();
+            setShowOnboardingModal(false);
+          }}
+          onComplete={(group) => {
+            if (showOnboarding) dismissOnboarding();
+            setShowOnboardingModal(false);
+            handleGroupAdded(group);
+          }}
+        />
+      )}
 
       <ExpenseModal
         isOpen={showExpenseModal}
