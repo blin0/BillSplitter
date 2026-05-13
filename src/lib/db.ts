@@ -196,10 +196,20 @@ export interface OwnStats {
 
 // ─── Stripe / subscription ────────────────────────────────────────────────────
 
+/** Validate a promo code against Stripe. Returns discount info if valid. */
+export async function validatePromoCode(code: string): Promise<DbResult<{ promoCodeId: string; percentOff: number | null; amountOff: number | null; duration: string }>> {
+  const { data, error } = await supabase.functions.invoke('validate-promo-code', {
+    body: { code },
+  });
+  if (error) return { data: null, error: error.message ?? 'Validation failed' };
+  if (!data?.valid) return { data: null, error: data?.error ?? 'Invalid promo code' };
+  return { data: { promoCodeId: data.promoCodeId as string, percentOff: data.percentOff as number | null, amountOff: data.amountOff as number | null, duration: data.duration as string }, error: null };
+}
+
 /** Kick off a Stripe Checkout session. Returns the redirect URL. */
-export async function createCheckoutSession(priceId: string): Promise<DbResult<string>> {
+export async function createCheckoutSession(priceId: string, promoCodeId?: string): Promise<DbResult<string>> {
   const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-    body: { price_id: priceId },
+    body: { price_id: priceId, promo_code_id: promoCodeId ?? null },
   });
 
   if (error) return { data: null, error: error.message ?? 'Checkout failed' };
