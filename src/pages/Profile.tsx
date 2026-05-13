@@ -851,7 +851,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                   )}
 
                   {/* ── Promo code input ── */}
-                  {(subscription.subscriptionTier === 0 || subscription.cancelAtPeriodEnd) && (
+                  {(true) && (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">
@@ -933,6 +933,15 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                       return discounted === 0 ? '$0' : `$${discounted.toFixed(2)}`;
                     }
 
+                    function fmtAmt(n: number) {
+                      return n <= 0 ? '$0' : `$${n.toFixed(2)}`;
+                    }
+
+                    // Amounts paid for Pro — used to compute upgrade delta for Premier display
+                    const PRO_MONTHLY_AMT       = 4.99;
+                    const PRO_YEARLY_MONTHLY_AMT = 2.99;
+                    const PRO_YEARLY_TOTAL_AMT   = 35.88;
+
                     // ── Tier card ─────────────────────────────────────────────
                     type TierCardProps = {
                       tier:         'free' | 'pro' | 'premier';
@@ -1009,52 +1018,83 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           </div>
 
                           {/* Price */}
-                          <div className="mb-1">
-                            {isFree ? (
-                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
-                                {t('profile.free')}
-                              </p>
-                            ) : billingCycle === 'yearly' ? (
-                              <>
-                                <div className="flex items-baseline gap-2">
-                                  <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
-                                    {monthlyPrice}
-                                  </del>
-                                  {appliedPromo && (
-                                    <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
-                                      {yearlyMonthly}
-                                    </del>
-                                  )}
-                                  <p className={cn('text-3xl font-extrabold leading-none', appliedPromo ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
-                                    {appliedPromo ? applyDiscount(yearlyMonthly, appliedPromo.percentOff ?? 0) : yearlyMonthly}
-                                    <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                          {(() => {
+                            // Pro subscriber looking at Premier upgrade: show prorated delta
+                            const isProUpgrade = subscription.subscriptionTier === 1 && tier === 'premier' && !isCurrent;
+                            const upgradeMonthly = isProUpgrade
+                              ? fmtAmt(parseFloat(monthlyPrice.replace('$', '')) - PRO_MONTHLY_AMT)
+                              : null;
+                            const upgradeYearlyMonthly = isProUpgrade
+                              ? fmtAmt(parseFloat(yearlyMonthly.replace('$', '')) - PRO_YEARLY_MONTHLY_AMT)
+                              : null;
+                            const upgradeYearlyTotal = isProUpgrade
+                              ? fmtAmt(parseFloat(yearlyTotal.replace('$', '')) - PRO_YEARLY_TOTAL_AMT)
+                              : null;
+
+                            // Final displayed price: promo > proration > full
+                            const displayMonthly     = appliedPromo ? applyDiscount(monthlyPrice, appliedPromo.percentOff ?? 0)
+                                                      : upgradeMonthly ?? monthlyPrice;
+                            const displayYearlyMo    = appliedPromo ? applyDiscount(yearlyMonthly, appliedPromo.percentOff ?? 0)
+                                                      : upgradeYearlyMonthly ?? yearlyMonthly;
+                            const displayYearlyTotal = appliedPromo ? applyDiscount(yearlyTotal, appliedPromo.percentOff ?? 0)
+                                                      : upgradeYearlyTotal ?? yearlyTotal;
+
+                            const hasDiscount = !!appliedPromo || isProUpgrade;
+
+                            return (
+                              <div className="mb-1">
+                                {isFree ? (
+                                  <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
+                                    {t('profile.free')}
                                   </p>
-                                </div>
-                                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                                  {appliedPromo
-                                    ? `Billed ${applyDiscount(yearlyTotal, appliedPromo.percentOff ?? 0)}/yr · ${appliedPromo.label}`
-                                    : t('profile.billedYearly', { total: yearlyTotal })}
-                                </p>
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex items-baseline gap-2">
-                                  {appliedPromo && (
-                                    <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
-                                      {monthlyPrice}
-                                    </del>
-                                  )}
-                                  <p className={cn('text-3xl font-extrabold leading-none', appliedPromo ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
-                                    {appliedPromo ? applyDiscount(monthlyPrice, appliedPromo.percentOff ?? 0) : monthlyPrice}
-                                    <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
-                                  </p>
-                                </div>
-                                {appliedPromo && (
-                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{appliedPromo.label} applied</p>
+                                ) : billingCycle === 'yearly' ? (
+                                  <>
+                                    <div className="flex items-baseline gap-2">
+                                      <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                        {monthlyPrice}
+                                      </del>
+                                      {hasDiscount && (
+                                        <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                          {yearlyMonthly}
+                                        </del>
+                                      )}
+                                      <p className={cn('text-3xl font-extrabold leading-none', hasDiscount ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                        {displayYearlyMo}
+                                        <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                                      </p>
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
+                                      {appliedPromo
+                                        ? `Billed ${displayYearlyTotal}/yr · ${appliedPromo.label}`
+                                        : isProUpgrade
+                                          ? `Billed ${displayYearlyTotal}/yr this cycle · Full ${yearlyTotal}/yr after`
+                                          : t('profile.billedYearly', { total: yearlyTotal })}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex items-baseline gap-2">
+                                      {hasDiscount && (
+                                        <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                          {monthlyPrice}
+                                        </del>
+                                      )}
+                                      <p className={cn('text-3xl font-extrabold leading-none', hasDiscount ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                        {displayMonthly}
+                                        <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                                      </p>
+                                    </div>
+                                    {appliedPromo && (
+                                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{appliedPromo.label} applied</p>
+                                    )}
+                                    {isProUpgrade && !appliedPromo && (
+                                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">Pro credit applied · Full {monthlyPrice}/mo after</p>
+                                    )}
+                                  </>
                                 )}
-                              </>
-                            )}
-                          </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Features */}
                           <ul className="mt-4 mb-5 space-y-2 flex-1">
