@@ -408,9 +408,11 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const subscription = useSubscriptionContext();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError,   setCheckoutError  ] = useState<string | null>(null);
-  const [cancelLoading,   setCancelLoading  ] = useState(false);
-  const [cancelError,     setCancelError    ] = useState<string | null>(null);
-  const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
+  const [cancelLoading,       setCancelLoading      ] = useState(false);
+  const [cancelError,         setCancelError        ] = useState<string | null>(null);
+  const [showCancelModal,     setShowCancelModal    ] = useState(false);
+  const [cancelModalTierName, setCancelModalTierName] = useState('');
+  const [billingCycle,        setBillingCycle       ] = useState<'monthly' | 'yearly'>('monthly');
 
   // Promo code state
   const [promoInput,    setPromoInput   ] = useState('');
@@ -452,7 +454,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     window.location.href = url;
   }
 
-  async function handleCancelPlan() {
+  function openCancelModal(tierName: string) {
+    setCancelModalTierName(tierName);
+    setShowCancelModal(true);
+  }
+
+  async function confirmCancel() {
+    setShowCancelModal(false);
     setCancelLoading(true);
     setCancelError(null);
     const { error } = await cancelSubscription();
@@ -476,8 +484,56 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const cancelPeriodEndLabel = subscription.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+
   return (
     <div className="min-h-full bg-gray-50 dark:bg-slate-950" style={{ touchAction: 'pan-y' }}>
+
+      {/* ── Cancellation confirmation modal ── */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowCancelModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">
+              Confirm Cancellation?
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
+              Your <strong className="text-gray-700 dark:text-slate-200">{cancelModalTierName}</strong> features
+              will remain active until the end of your current billing period
+              {cancelPeriodEndLabel
+                ? <> on <strong className="text-gray-700 dark:text-slate-200">{cancelPeriodEndLabel}</strong></>
+                : null}.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={confirmCancel}
+                disabled={cancelLoading}
+                className="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelLoading
+                  ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Working…</span>
+                  : 'Confirm Cancellation'}
+              </button>
+            </div>
+            {cancelError && (
+              <p className="text-xs text-red-500 dark:text-red-400 mt-3 text-center">{cancelError}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Floating save button — appears when there are unsaved changes */}
       {isDirty && (
@@ -1024,11 +1080,16 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                 {subscription.cancelAtPeriodEnd ? (
                                   /* ── Pending cancellation state ── */
                                   <>
+                                    {periodEndDate && (
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                                        Expires on {periodEndDate}
+                                      </p>
+                                    )}
                                     <button
                                       disabled
-                                      className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-orange-400 to-rose-500 opacity-90 cursor-not-allowed shadow-inner"
+                                      className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-slate-500 dark:bg-slate-600 opacity-75 cursor-not-allowed shadow-inner"
                                     >
-                                      {periodEndDate ? `Ends ${periodEndDate}` : 'Cancellation pending'}
+                                      Canceled
                                     </button>
                                     <button
                                       onClick={handleReactivatePlan}
@@ -1043,13 +1104,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                     >
                                       {cancelLoading
                                         ? <span className="flex items-center justify-center gap-1"><Loader2 size={11} className="animate-spin" />Working…</span>
-                                        : 'Undo Cancellation'}
+                                        : 'Renew Plan'}
                                     </button>
                                   </>
                                 ) : (
                                   /* ── Active plan: hover reveals Cancel Plan ── */
                                   <button
-                                    onClick={cancelLoading ? undefined : handleCancelPlan}
+                                    onClick={cancelLoading ? undefined : () => openCancelModal(name)}
                                     disabled={cancelLoading}
                                     className={cn(
                                       'group w-full py-2 rounded-xl text-sm font-bold text-white text-center shadow-inner transition-all duration-200',
