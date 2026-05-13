@@ -385,7 +385,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     if (error) { setSaveError(error); return; }
     // Sync default tax rate to localStorage so ExpenseForm sees it immediately
     if (userId) {
-      try { localStorage.setItem(`bsp_tax_${userId}`, String(taxRateNum)); } catch (_) {}
+      try { localStorage.setItem(`bsp_tax_${userId}`, String(taxRateNum)); } catch { }
     }
     setProfile(prev => prev ? {
       ...prev,
