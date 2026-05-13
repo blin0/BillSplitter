@@ -206,6 +206,26 @@ export async function validatePromoCode(code: string): Promise<DbResult<{ promoC
   return { data: { promoCodeId: data.promoCodeId as string, percentOff: data.percentOff as number | null, amountOff: data.amountOff as number | null, duration: data.duration as string }, error: null };
 }
 
+/** Create a subscription directly (no redirect) — use when promo makes total $0. */
+export async function createDirectSubscription(
+  priceId: string,
+  promoCodeId: string,
+): Promise<DbResult<{ subscriptionId: string; status: string; currentPeriodEnd: string | null }>> {
+  const { data, error } = await supabase.functions.invoke('create-direct-subscription', {
+    body: { price_id: priceId, promo_code_id: promoCodeId },
+  });
+  if (error) return { data: null, error: error.message ?? 'Subscription failed' };
+  if (!data?.success) return { data: null, error: data?.error ?? 'Subscription failed' };
+  return {
+    data: {
+      subscriptionId:   data.subscriptionId as string,
+      status:           data.status as string,
+      currentPeriodEnd: data.currentPeriodEnd as string | null,
+    },
+    error: null,
+  };
+}
+
 /** Kick off a Stripe Checkout session. Returns the redirect URL. */
 export async function createCheckoutSession(priceId: string, promoCodeId?: string): Promise<DbResult<string>> {
   const { data, error } = await supabase.functions.invoke('create-checkout-session', {

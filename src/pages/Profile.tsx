@@ -5,7 +5,7 @@ import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
   fetchOwnProfile, updateOwnProfile, fetchOwnStats,
-  createCheckoutSession, cancelSubscription, reactivateSubscription, validatePromoCode,
+  createCheckoutSession, createDirectSubscription, cancelSubscription, reactivateSubscription, validatePromoCode,
   type OwnProfile, type OwnStats,
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
@@ -434,6 +434,18 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   async function handleUpgrade(priceId: string) {
     setCheckoutLoading(priceId);
     setCheckoutError(null);
+
+    // 100% off promo: create subscription directly, no Stripe redirect
+    if (appliedPromo?.percentOff === 100 && appliedPromo.id) {
+      const { error } = await createDirectSubscription(priceId, appliedPromo.id);
+      setCheckoutLoading(null);
+      if (error) { setCheckoutError(error); return; }
+      // Real-time postgres_changes in useSubscription fires automatically
+      setAppliedPromo(null);
+      setPromoInput('');
+      return;
+    }
+
     const { data: url, error } = await createCheckoutSession(priceId, appliedPromo?.id);
     setCheckoutLoading(null);
     if (error || !url) { setCheckoutError(error ?? t('profile.checkoutError')); return; }
