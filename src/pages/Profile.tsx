@@ -5,7 +5,7 @@ import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
   fetchOwnProfile, updateOwnProfile, fetchOwnStats,
-  createCheckoutSession, cancelSubscription, reactivateSubscription,
+  createCheckoutSession, cancelSubscription, reactivateSubscription, validatePromoCode,
   type OwnProfile, type OwnStats,
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
@@ -412,10 +412,29 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const [cancelError,     setCancelError    ] = useState<string | null>(null);
   const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
 
+  // Promo code state
+  const [promoInput,    setPromoInput   ] = useState('');
+  const [promoLoading,  setPromoLoading ] = useState(false);
+  const [promoError,    setPromoError   ] = useState<string | null>(null);
+  const [appliedPromo,  setAppliedPromo ] = useState<{ id: string; percentOff: number | null; label: string } | null>(null);
+
+  async function handleApplyPromo() {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    setAppliedPromo(null);
+    const { data, error } = await validatePromoCode(code);
+    setPromoLoading(false);
+    if (error || !data) { setPromoError(error ?? 'Invalid promo code'); return; }
+    const label = data.percentOff === 100 ? '100% off' : data.percentOff ? `${data.percentOff}% off` : 'Discount applied';
+    setAppliedPromo({ id: data.promoCodeId, percentOff: data.percentOff, label });
+  }
+
   async function handleUpgrade(priceId: string) {
     setCheckoutLoading(priceId);
     setCheckoutError(null);
-    const { data: url, error } = await createCheckoutSession(priceId);
+    const { data: url, error } = await createCheckoutSession(priceId, appliedPromo?.id);
     setCheckoutLoading(null);
     if (error || !url) { setCheckoutError(error ?? t('profile.checkoutError')); return; }
     window.location.href = url;
@@ -756,6 +775,52 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           );
                         })}
                       </div>
+                    </div>
+                  )}
+
+                  {/* ── Promo code input ── */}
+                  {subscription.subscriptionTier === 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={promoInput}
+                            onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(null); }}
+                            onKeyDown={e => e.key === 'Enter' && handleApplyPromo()}
+                            placeholder="Have a promo code?"
+                            disabled={!!appliedPromo || promoLoading}
+                            className={cn(
+                              'w-full px-3 py-2 rounded-xl text-sm bg-transparent border transition-colors outline-none',
+                              'border-slate-200 dark:border-slate-800 focus:border-violet-500 dark:focus:border-violet-500',
+                              'placeholder:text-slate-400 dark:placeholder:text-slate-600 text-slate-700 dark:text-slate-200',
+                              'disabled:opacity-50 disabled:cursor-not-allowed',
+                            )}
+                          />
+                        </div>
+                        {appliedPromo ? (
+                          <button
+                            onClick={() => { setAppliedPromo(null); setPromoInput(''); }}
+                            className="px-3 py-2 rounded-xl text-xs font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-red-400 hover:text-red-500 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleApplyPromo}
+                            disabled={promoLoading || !promoInput.trim()}
+                            className="px-3 py-2 rounded-xl text-xs font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {promoLoading ? <Loader2 size={12} className="animate-spin" /> : 'Apply'}
+                          </button>
+                        )}
+                      </div>
+                      {appliedPromo && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <Check size={12} /> Code applied — {appliedPromo.label}
+                        </p>
+                      )}
+                      {promoError && <p className="text-xs text-red-500 dark:text-red-400">{promoError}</p>}
                     </div>
                   )}
 
