@@ -442,9 +442,9 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
       const { error } = await createDirectSubscription(priceId, appliedPromo.id);
       setCheckoutLoading(null);
       if (error) { setCheckoutError(error); return; }
-      // Real-time postgres_changes in useSubscription fires automatically
       setAppliedPromo(null);
       setPromoInput('');
+      await subscription.refresh();
       return;
     }
 
@@ -465,7 +465,8 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     setCancelError(null);
     const { error } = await cancelSubscription();
     setCancelLoading(false);
-    if (error) setCancelError(error);
+    if (error) { setCancelError(error); return; }
+    await subscription.refresh();
   }
 
   async function handleReactivatePlan() {
@@ -476,6 +477,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     if (error) { setCancelError(error); return; }
     setAppliedPromo(null);
     setPromoInput('');
+    await subscription.refresh();
   }
 
   const initials = (() => {

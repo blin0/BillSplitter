@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 export interface SubscriptionState {
@@ -13,6 +13,8 @@ export interface SubscriptionState {
   /** Derived convenience — true when tier >= 1. */
   isPro:              boolean;
   loading:            boolean;
+  /** Force a re-read from the DB — call after any subscription mutation. */
+  refresh:            () => Promise<void>;
 }
 
 /**
@@ -23,8 +25,16 @@ export interface SubscriptionState {
  * Prefer consuming via SubscriptionContext rather than calling this hook
  * directly — the context calls it once at the root and fans the result out.
  */
+type ProfileRow = {
+  subscription_tier:    number | null;
+  subscription_status:  string | null;
+  price_id:             string | null;
+  cancel_at_period_end?: boolean | null;
+  current_period_end?:   string | null;
+};
+
 export function useSubscription(): SubscriptionState {
-  const [state, setState] = useState<SubscriptionState>({
+  const [state, setState] = useState<Omit<SubscriptionState, 'refresh'>>({
     subscriptionTier:   0,
     subscriptionStatus: null,
     priceId:            null,
@@ -34,29 +44,23 @@ export function useSubscription(): SubscriptionState {
     loading:            true,
   });
 
+  function applyRow(r: ProfileRow) {
+    const tier = (Math.min(Math.max(r.subscription_tier ?? 0, 0), 3)) as 0 | 1 | 2 | 3;
+    setState({
+      subscriptionTier:   tier,
+      subscriptionStatus: r.subscription_status  ?? null,
+      priceId:            r.price_id             ?? null,
+      cancelAtPeriodEnd:  r.cancel_at_period_end ?? false,
+      currentPeriodEnd:   r.current_period_end   ?? null,
+      isPro:              tier >= 1,
+      loading:            false,
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
     const channelName = `profile-sub-${Math.random().toString(36).slice(2)}`;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    function applyRow(r: {
-      subscription_tier:   number | null;
-      subscription_status: string | null;
-      price_id:            string | null;
-      cancel_at_period_end?: boolean | null;
-      current_period_end?:   string | null;
-    }) {
-      const tier = (Math.min(Math.max(r.subscription_tier ?? 0, 0), 3)) as 0 | 1 | 2 | 3;
-      setState({
-        subscriptionTier:   tier,
-        subscriptionStatus: r.subscription_status   ?? null,
-        priceId:            r.price_id              ?? null,
-        cancelAtPeriodEnd:  r.cancel_at_period_end  ?? false,
-        currentPeriodEnd:   r.current_period_end    ?? null,
-        isPro:              tier >= 1,
-        loading:            false,
-      });
-    }
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -109,7 +113,18 @@ export function useSubscription(): SubscriptionState {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return state;
+  const refresh = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const result = await supabase
+      .from('profiles')
+      .select('subscription_tier, subscription_status, price_id, cancel_at_period_end, current_period_end')
+      .eq('id', user.id)
+      .single();
+    if (result.data) applyRow(result.data as unknown as ProfileRow);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { ...state, refresh };
 }
