@@ -1082,29 +1082,29 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                   <>
                                     {periodEndDate && (
                                       <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
-                                        Expires on {periodEndDate}
+                                        Cancels on {periodEndDate}
                                       </p>
                                     )}
                                     <button
-                                      disabled
-                                      className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-slate-500 dark:bg-slate-600 opacity-75 cursor-not-allowed shadow-inner"
-                                    >
-                                      Canceled
-                                    </button>
-                                    <button
-                                      onClick={handleReactivatePlan}
+                                      onClick={cancelLoading ? undefined : handleReactivatePlan}
                                       disabled={cancelLoading}
                                       className={cn(
-                                        'w-full py-1.5 rounded-xl text-xs font-semibold transition-all',
-                                        'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
-                                        'border border-emerald-200 dark:border-emerald-800/50',
-                                        'hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
-                                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                                        'group w-full py-2 rounded-xl text-sm font-bold text-white text-center shadow-inner transition-all duration-200',
+                                        cancelLoading
+                                          ? 'opacity-60 cursor-not-allowed bg-slate-500'
+                                          : popular
+                                            ? 'bg-slate-500 dark:bg-slate-600 hover:bg-gradient-to-r hover:from-[#8B5CF6] hover:to-[#3B82F6]'
+                                            : 'bg-slate-500 dark:bg-slate-600 hover:bg-gradient-to-r hover:from-[#FBBF24] hover:to-[#EC4899]',
                                       )}
                                     >
-                                      {cancelLoading
-                                        ? <span className="flex items-center justify-center gap-1"><Loader2 size={11} className="animate-spin" />Working…</span>
-                                        : 'Renew Plan'}
+                                      {cancelLoading ? (
+                                        <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Working…</span>
+                                      ) : (
+                                        <>
+                                          <span className="group-hover:hidden">Canceled</span>
+                                          <span className="hidden group-hover:inline">Renew Plan</span>
+                                        </>
+                                      )}
                                     </button>
                                   </>
                                 ) : (
