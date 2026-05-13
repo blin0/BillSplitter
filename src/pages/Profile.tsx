@@ -471,9 +471,11 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   async function handleReactivatePlan() {
     setCancelLoading(true);
     setCancelError(null);
-    const { error } = await reactivateSubscription();
+    const { error } = await reactivateSubscription(appliedPromo?.id);
     setCancelLoading(false);
-    if (error) setCancelError(error);
+    if (error) { setCancelError(error); return; }
+    setAppliedPromo(null);
+    setPromoInput('');
   }
 
   const initials = (() => {
@@ -847,7 +849,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                   )}
 
                   {/* ── Promo code input ── */}
-                  {subscription.subscriptionTier === 0 && (
+                  {(subscription.subscriptionTier === 0 || subscription.cancelAtPeriodEnd) && (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">

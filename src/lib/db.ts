@@ -248,10 +248,10 @@ export async function cancelSubscription(): Promise<DbResult<{ cancelAtPeriodEnd
   return { data: { cancelAtPeriodEnd: data.cancel_at_period_end as boolean, currentPeriodEnd: data.current_period_end as string | null }, error: null };
 }
 
-/** Undo a pending cancellation — keeps the subscription active through period end. */
-export async function reactivateSubscription(): Promise<DbResult<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>> {
+/** Undo a pending cancellation. Optionally apply a promo code to the reactivated subscription. */
+export async function reactivateSubscription(promoCodeId?: string): Promise<DbResult<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>> {
   const { data, error } = await supabase.functions.invoke('cancel-subscription', {
-    body: { action: 'reactivate' },
+    body: { action: 'reactivate', promo_code_id: promoCodeId ?? null },
   });
   if (error) return { data: null, error: error.message ?? 'Reactivation failed' };
   if (!data?.success) return { data: null, error: data?.error ?? 'Reactivation failed' };
