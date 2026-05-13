@@ -6,6 +6,10 @@ export interface SubscriptionState {
   subscriptionTier:   0 | 1 | 2 | 3;
   subscriptionStatus: string | null;
   priceId:            string | null;
+  /** True when subscription is scheduled to cancel at period end. */
+  cancelAtPeriodEnd:  boolean;
+  /** ISO timestamp of when the current billing period ends. */
+  currentPeriodEnd:   string | null;
   /** Derived convenience — true when tier >= 1. */
   isPro:              boolean;
   loading:            boolean;
@@ -24,6 +28,8 @@ export function useSubscription(): SubscriptionState {
     subscriptionTier:   0,
     subscriptionStatus: null,
     priceId:            null,
+    cancelAtPeriodEnd:  false,
+    currentPeriodEnd:   null,
     isPro:              false,
     loading:            true,
   });
@@ -37,12 +43,16 @@ export function useSubscription(): SubscriptionState {
       subscription_tier:   number | null;
       subscription_status: string | null;
       price_id:            string | null;
+      cancel_at_period_end?: boolean | null;
+      current_period_end?:   string | null;
     }) {
       const tier = (Math.min(Math.max(r.subscription_tier ?? 0, 0), 3)) as 0 | 1 | 2 | 3;
       setState({
         subscriptionTier:   tier,
-        subscriptionStatus: r.subscription_status ?? null,
-        priceId:            r.price_id            ?? null,
+        subscriptionStatus: r.subscription_status   ?? null,
+        priceId:            r.price_id              ?? null,
+        cancelAtPeriodEnd:  r.cancel_at_period_end  ?? false,
+        currentPeriodEnd:   r.current_period_end    ?? null,
         isPro:              tier >= 1,
         loading:            false,
       });
@@ -53,15 +63,22 @@ export function useSubscription(): SubscriptionState {
       if (cancelled) return;
 
       if (!user) {
-        setState({ subscriptionTier: 0, subscriptionStatus: null, priceId: null, isPro: false, loading: false });
+        setState({ subscriptionTier: 0, subscriptionStatus: null, priceId: null, cancelAtPeriodEnd: false, currentPeriodEnd: null, isPro: false, loading: false });
         return;
       }
 
-      const { data } = await supabase
+      const result = await supabase
         .from('profiles')
-        .select('subscription_tier, subscription_status, price_id')
+        .select('subscription_tier, subscription_status, price_id, cancel_at_period_end, current_period_end')
         .eq('id', user.id)
         .single();
+      const data = result.data as {
+        subscription_tier:   number | null;
+        subscription_status: string | null;
+        price_id:            string | null;
+        cancel_at_period_end?: boolean | null;
+        current_period_end?:   string | null;
+      } | null;
 
       if (cancelled) return;
       if (data) applyRow(data);
@@ -78,6 +95,8 @@ export function useSubscription(): SubscriptionState {
               subscription_tier:   number | null;
               subscription_status: string | null;
               price_id:            string | null;
+              cancel_at_period_end?: boolean | null;
+              current_period_end?:   string | null;
             });
           },
         )

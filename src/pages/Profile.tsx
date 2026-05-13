@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
-  fetchOwnProfile, updateOwnProfile, fetchOwnStats, createCheckoutSession,
+  fetchOwnProfile, updateOwnProfile, fetchOwnStats,
+  createCheckoutSession, cancelSubscription, reactivateSubscription,
   type OwnProfile, type OwnStats,
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
@@ -407,6 +408,8 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const subscription = useSubscriptionContext();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError,   setCheckoutError  ] = useState<string | null>(null);
+  const [cancelLoading,   setCancelLoading  ] = useState(false);
+  const [cancelError,     setCancelError    ] = useState<string | null>(null);
   const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
 
   async function handleUpgrade(priceId: string) {
@@ -416,6 +419,22 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
     setCheckoutLoading(null);
     if (error || !url) { setCheckoutError(error ?? t('profile.checkoutError')); return; }
     window.location.href = url;
+  }
+
+  async function handleCancelPlan() {
+    setCancelLoading(true);
+    setCancelError(null);
+    const { error } = await cancelSubscription();
+    setCancelLoading(false);
+    if (error) setCancelError(error);
+  }
+
+  async function handleReactivatePlan() {
+    setCancelLoading(true);
+    setCancelError(null);
+    const { error } = await reactivateSubscription();
+    setCancelLoading(false);
+    if (error) setCancelError(error);
   }
 
   const initials = (() => {
@@ -787,10 +806,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                       tier, name, monthlyPrice, yearlyMonthly, yearlyTotal,
                       features, priceId, popular = false, dark = false,
                     }: TierCardProps) {
-                      const isCurrent  = currentTier === tier;
+                      const isCurrent    = currentTier === tier;
                       const isComingSoon = !!priceId && priceId.startsWith('price_TODO');
-                      const isLoading  = !!priceId && checkoutLoading === priceId;
-                      const isFree     = tier === 'free';
+                      const isLoading    = !!priceId && checkoutLoading === priceId;
+                      const isFree       = tier === 'free';
+                      const periodEndDate = subscription.currentPeriodEnd
+                        ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                        : null;
 
                       const cardInner = (
                         <div className={cn(
@@ -894,20 +916,64 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                               >
                                 {t('profile.currentPlan')}
                               </button>
-                            ) : popular ? (
-                              <button
-                                disabled
-                                className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] opacity-90 cursor-not-allowed shadow-inner"
-                              >
-                                {t('profile.currentPlan')}
-                              </button>
                             ) : (
-                              <button
-                                disabled
-                                className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-[#FBBF24] to-[#EC4899] opacity-90 cursor-not-allowed shadow-inner"
-                              >
-                                {t('profile.currentPlan')}
-                              </button>
+                              <div className="flex flex-col gap-2">
+                                {subscription.cancelAtPeriodEnd ? (
+                                  /* ── Pending cancellation state ── */
+                                  <>
+                                    <button
+                                      disabled
+                                      className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-orange-400 to-rose-500 opacity-90 cursor-not-allowed shadow-inner"
+                                    >
+                                      {periodEndDate ? `Ends ${periodEndDate}` : 'Cancellation pending'}
+                                    </button>
+                                    <button
+                                      onClick={handleReactivatePlan}
+                                      disabled={cancelLoading}
+                                      className={cn(
+                                        'w-full py-1.5 rounded-xl text-xs font-semibold transition-all',
+                                        'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
+                                        'border border-emerald-200 dark:border-emerald-800/50',
+                                        'hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
+                                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                                      )}
+                                    >
+                                      {cancelLoading
+                                        ? <span className="flex items-center justify-center gap-1"><Loader2 size={11} className="animate-spin" />Working…</span>
+                                        : 'Undo Cancellation'}
+                                    </button>
+                                  </>
+                                ) : (
+                                  /* ── Active plan: hover reveals Cancel Plan ── */
+                                  <button
+                                    onClick={cancelLoading ? undefined : handleCancelPlan}
+                                    disabled={cancelLoading}
+                                    className={cn(
+                                      'group w-full py-2 rounded-xl text-sm font-bold text-white text-center shadow-inner transition-all duration-200',
+                                      cancelLoading
+                                        ? 'opacity-60 cursor-not-allowed bg-gradient-to-r from-red-500 to-rose-600'
+                                        : popular
+                                          ? 'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:from-red-500 hover:to-rose-600'
+                                          : 'bg-gradient-to-r from-[#FBBF24] to-[#EC4899] hover:from-red-500 hover:to-rose-600',
+                                    )}
+                                  >
+                                    {cancelLoading ? (
+                                      <span className="flex items-center justify-center gap-1.5">
+                                        <Loader2 size={13} className="animate-spin" />Working…
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <span className="group-hover:hidden">{t('profile.currentPlan')}</span>
+                                        <span className="hidden group-hover:inline">Cancel Plan</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+
+                                {cancelError && (
+                                  <p className="text-[11px] text-red-500 dark:text-red-400 text-center">{cancelError}</p>
+                                )}
+                              </div>
                             )
                           ) : isFree ? (
                             <button

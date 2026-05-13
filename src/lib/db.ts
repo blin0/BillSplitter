@@ -208,6 +208,26 @@ export async function createCheckoutSession(priceId: string): Promise<DbResult<s
   return { data: data.url as string, error: null };
 }
 
+/** Cancel subscription at period end. Returns updated flags from the edge function. */
+export async function cancelSubscription(): Promise<DbResult<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>> {
+  const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+    body: { action: 'cancel' },
+  });
+  if (error) return { data: null, error: error.message ?? 'Cancellation failed' };
+  if (!data?.success) return { data: null, error: data?.error ?? 'Cancellation failed' };
+  return { data: { cancelAtPeriodEnd: data.cancel_at_period_end as boolean, currentPeriodEnd: data.current_period_end as string | null }, error: null };
+}
+
+/** Undo a pending cancellation — keeps the subscription active through period end. */
+export async function reactivateSubscription(): Promise<DbResult<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>> {
+  const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+    body: { action: 'reactivate' },
+  });
+  if (error) return { data: null, error: error.message ?? 'Reactivation failed' };
+  if (!data?.success) return { data: null, error: data?.error ?? 'Reactivation failed' };
+  return { data: { cancelAtPeriodEnd: data.cancel_at_period_end as boolean, currentPeriodEnd: data.current_period_end as string | null }, error: null };
+}
+
 /** Count how many groups the current user owns (role = admin). Used for free-tier gate. */
 export async function fetchOwnGroupCount(): Promise<DbResult<number>> {
   const { data: { user } } = await supabase.auth.getUser();
