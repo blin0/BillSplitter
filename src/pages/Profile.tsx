@@ -5,7 +5,7 @@ import { cn } from '../lib/cn';
 import { supabase } from '../lib/supabase';
 import {
   fetchOwnProfile, updateOwnProfile, fetchOwnStats,
-  createCheckoutSession, cancelSubscription, reactivateSubscription, validatePromoCode,
+  createCheckoutSession, createDirectSubscription, cancelSubscription, reactivateSubscription, validatePromoCode,
   type OwnProfile, type OwnStats,
 } from '../lib/db';
 import { CURRENCIES, useCurrency, type CurrencyCode } from '../context/CurrencyContext';
@@ -408,9 +408,11 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   const subscription = useSubscriptionContext();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError,   setCheckoutError  ] = useState<string | null>(null);
-  const [cancelLoading,   setCancelLoading  ] = useState(false);
-  const [cancelError,     setCancelError    ] = useState<string | null>(null);
-  const [billingCycle,    setBillingCycle   ] = useState<'monthly' | 'yearly'>('monthly');
+  const [cancelLoading,       setCancelLoading      ] = useState(false);
+  const [cancelError,         setCancelError        ] = useState<string | null>(null);
+  const [showCancelModal,     setShowCancelModal    ] = useState(false);
+  const [cancelModalTierName, setCancelModalTierName] = useState('');
+  const [billingCycle,        setBillingCycle       ] = useState<'monthly' | 'yearly'>('monthly');
 
   // Promo code state
   const [promoInput,    setPromoInput   ] = useState('');
@@ -434,26 +436,48 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   async function handleUpgrade(priceId: string) {
     setCheckoutLoading(priceId);
     setCheckoutError(null);
+
+    // 100% off promo: create subscription directly, no Stripe redirect
+    if (appliedPromo?.percentOff === 100 && appliedPromo.id) {
+      const { error } = await createDirectSubscription(priceId, appliedPromo.id);
+      setCheckoutLoading(null);
+      if (error) { setCheckoutError(error); return; }
+      setAppliedPromo(null);
+      setPromoInput('');
+      await subscription.refresh();
+      return;
+    }
+
     const { data: url, error } = await createCheckoutSession(priceId, appliedPromo?.id);
     setCheckoutLoading(null);
     if (error || !url) { setCheckoutError(error ?? t('profile.checkoutError')); return; }
     window.location.href = url;
   }
 
-  async function handleCancelPlan() {
+  function openCancelModal(tierName: string) {
+    setCancelModalTierName(tierName);
+    setShowCancelModal(true);
+  }
+
+  async function confirmCancel() {
+    setShowCancelModal(false);
     setCancelLoading(true);
     setCancelError(null);
     const { error } = await cancelSubscription();
     setCancelLoading(false);
-    if (error) setCancelError(error);
+    if (error) { setCancelError(error); return; }
+    await subscription.refresh();
   }
 
   async function handleReactivatePlan() {
     setCancelLoading(true);
     setCancelError(null);
-    const { error } = await reactivateSubscription();
+    const { error } = await reactivateSubscription(appliedPromo?.id);
     setCancelLoading(false);
-    if (error) setCancelError(error);
+    if (error) { setCancelError(error); return; }
+    setAppliedPromo(null);
+    setPromoInput('');
+    await subscription.refresh();
   }
 
   const initials = (() => {
@@ -464,8 +488,56 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
   })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const cancelPeriodEndLabel = subscription.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+
   return (
     <div className="min-h-full bg-gray-50 dark:bg-slate-950" style={{ touchAction: 'pan-y' }}>
+
+      {/* ── Cancellation confirmation modal ── */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowCancelModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">
+              Confirm Cancellation?
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
+              Your <strong className="text-gray-700 dark:text-slate-200">{cancelModalTierName}</strong> features
+              will remain active until the end of your current billing period
+              {cancelPeriodEndLabel
+                ? <> on <strong className="text-gray-700 dark:text-slate-200">{cancelPeriodEndLabel}</strong></>
+                : null}.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={confirmCancel}
+                disabled={cancelLoading}
+                className="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelLoading
+                  ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Working…</span>
+                  : 'Confirm Cancellation'}
+              </button>
+            </div>
+            {cancelError && (
+              <p className="text-xs text-red-500 dark:text-red-400 mt-3 text-center">{cancelError}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Floating save button — appears when there are unsaved changes */}
       {isDirty && (
@@ -779,7 +851,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                   )}
 
                   {/* ── Promo code input ── */}
-                  {subscription.subscriptionTier === 0 && (
+                  {(true) && (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <div className="relative flex-1">
@@ -853,6 +925,22 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                         </li>
                       );
                     }
+
+                    function applyDiscount(priceStr: string, percentOff: number): string {
+                      const num = parseFloat(priceStr.replace('$', ''));
+                      if (isNaN(num)) return priceStr;
+                      const discounted = num * (1 - percentOff / 100);
+                      return discounted === 0 ? '$0' : `$${discounted.toFixed(2)}`;
+                    }
+
+                    function fmtAmt(n: number) {
+                      return n <= 0 ? '$0' : `$${n.toFixed(2)}`;
+                    }
+
+                    // Amounts paid for Pro — used to compute upgrade delta for Premier display
+                    const PRO_MONTHLY_AMT       = 4.99;
+                    const PRO_YEARLY_MONTHLY_AMT = 2.99;
+                    const PRO_YEARLY_TOTAL_AMT   = 35.88;
 
                     // ── Tier card ─────────────────────────────────────────────
                     type TierCardProps = {
@@ -930,33 +1018,83 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                           </div>
 
                           {/* Price */}
-                          <div className="mb-1">
-                            {isFree ? (
-                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
-                                {t('profile.free')}
-                              </p>
-                            ) : billingCycle === 'yearly' ? (
-                              <>
-                                <div className="flex items-baseline gap-2">
-                                  <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
-                                    {monthlyPrice}
-                                  </del>
-                                  <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
-                                    {yearlyMonthly}
-                                    <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                          {(() => {
+                            // Pro subscriber looking at Premier upgrade: show prorated delta
+                            const isProUpgrade = subscription.subscriptionTier === 1 && tier === 'premier' && !isCurrent;
+                            const upgradeMonthly = isProUpgrade
+                              ? fmtAmt(parseFloat(monthlyPrice.replace('$', '')) - PRO_MONTHLY_AMT)
+                              : null;
+                            const upgradeYearlyMonthly = isProUpgrade
+                              ? fmtAmt(parseFloat(yearlyMonthly.replace('$', '')) - PRO_YEARLY_MONTHLY_AMT)
+                              : null;
+                            const upgradeYearlyTotal = isProUpgrade
+                              ? fmtAmt(parseFloat(yearlyTotal.replace('$', '')) - PRO_YEARLY_TOTAL_AMT)
+                              : null;
+
+                            // Final displayed price: promo > proration > full
+                            const displayMonthly     = appliedPromo ? applyDiscount(monthlyPrice, appliedPromo.percentOff ?? 0)
+                                                      : upgradeMonthly ?? monthlyPrice;
+                            const displayYearlyMo    = appliedPromo ? applyDiscount(yearlyMonthly, appliedPromo.percentOff ?? 0)
+                                                      : upgradeYearlyMonthly ?? yearlyMonthly;
+                            const displayYearlyTotal = appliedPromo ? applyDiscount(yearlyTotal, appliedPromo.percentOff ?? 0)
+                                                      : upgradeYearlyTotal ?? yearlyTotal;
+
+                            const hasDiscount = !!appliedPromo || isProUpgrade;
+
+                            return (
+                              <div className="mb-1">
+                                {isFree ? (
+                                  <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
+                                    {t('profile.free')}
                                   </p>
-                                </div>
-                                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                                  {t('profile.billedYearly', { total: yearlyTotal })}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
-                                {monthlyPrice}
-                                <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
-                              </p>
-                            )}
-                          </div>
+                                ) : billingCycle === 'yearly' ? (
+                                  <>
+                                    <div className="flex items-baseline gap-2">
+                                      <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                        {monthlyPrice}
+                                      </del>
+                                      {hasDiscount && (
+                                        <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                          {yearlyMonthly}
+                                        </del>
+                                      )}
+                                      <p className={cn('text-3xl font-extrabold leading-none', hasDiscount ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                        {displayYearlyMo}
+                                        <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                                      </p>
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
+                                      {appliedPromo
+                                        ? `Billed ${displayYearlyTotal}/yr · ${appliedPromo.label}`
+                                        : isProUpgrade
+                                          ? `Billed ${displayYearlyTotal}/yr this cycle · Full ${yearlyTotal}/yr after`
+                                          : t('profile.billedYearly', { total: yearlyTotal })}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex items-baseline gap-2">
+                                      {hasDiscount && (
+                                        <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                          {monthlyPrice}
+                                        </del>
+                                      )}
+                                      <p className={cn('text-3xl font-extrabold leading-none', hasDiscount ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                        {displayMonthly}
+                                        <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                                      </p>
+                                    </div>
+                                    {appliedPromo && (
+                                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{appliedPromo.label} applied</p>
+                                    )}
+                                    {isProUpgrade && !appliedPromo && (
+                                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">Pro credit applied · Full {monthlyPrice}/mo after</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Features */}
                           <ul className="mt-4 mb-5 space-y-2 flex-1">
@@ -986,32 +1124,43 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                 {subscription.cancelAtPeriodEnd ? (
                                   /* ── Pending cancellation state ── */
                                   <>
+                                    {periodEndDate && (
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                                        Cancels on {periodEndDate}
+                                      </p>
+                                    )}
                                     <button
-                                      disabled
-                                      className="w-full py-2 rounded-xl text-sm font-bold text-white text-center bg-gradient-to-r from-orange-400 to-rose-500 opacity-90 cursor-not-allowed shadow-inner"
-                                    >
-                                      {periodEndDate ? `Ends ${periodEndDate}` : 'Cancellation pending'}
-                                    </button>
-                                    <button
-                                      onClick={handleReactivatePlan}
+                                      onClick={cancelLoading ? undefined : handleReactivatePlan}
                                       disabled={cancelLoading}
                                       className={cn(
-                                        'w-full py-1.5 rounded-xl text-xs font-semibold transition-all',
-                                        'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
-                                        'border border-emerald-200 dark:border-emerald-800/50',
-                                        'hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
-                                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                                        'group w-full py-2 rounded-xl text-sm font-bold text-white text-center shadow-inner transition-all duration-200',
+                                        cancelLoading
+                                          ? 'opacity-60 cursor-not-allowed bg-slate-500'
+                                          : popular
+                                            ? 'bg-slate-500 dark:bg-slate-600 hover:bg-gradient-to-r hover:from-[#8B5CF6] hover:to-[#3B82F6]'
+                                            : 'bg-slate-500 dark:bg-slate-600 hover:bg-gradient-to-r hover:from-[#FBBF24] hover:to-[#EC4899]',
                                       )}
                                     >
-                                      {cancelLoading
-                                        ? <span className="flex items-center justify-center gap-1"><Loader2 size={11} className="animate-spin" />Working…</span>
-                                        : 'Undo Cancellation'}
+                                      {cancelLoading ? (
+                                        <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />Working…</span>
+                                      ) : (
+                                        <>
+                                          <span className="group-hover:hidden">Canceled</span>
+                                          <span className="hidden group-hover:inline">Renew Plan</span>
+                                        </>
+                                      )}
                                     </button>
                                   </>
                                 ) : (
                                   /* ── Active plan: hover reveals Cancel Plan ── */
+                                  <>
+                                    {periodEndDate && (
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                                        Renews on {periodEndDate}
+                                      </p>
+                                    )}
                                   <button
-                                    onClick={cancelLoading ? undefined : handleCancelPlan}
+                                    onClick={cancelLoading ? undefined : () => openCancelModal(name)}
                                     disabled={cancelLoading}
                                     className={cn(
                                       'group w-full py-2 rounded-xl text-sm font-bold text-white text-center shadow-inner transition-all duration-200',
@@ -1033,6 +1182,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                       </>
                                     )}
                                   </button>
+                                  </>
                                 )}
 
                                 {cancelError && (
@@ -1068,7 +1218,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                             >
                               {isLoading
                                 ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
-                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
+                                : appliedPromo?.percentOff === 100 ? 'Get for Free' : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           ) : (
                             <button
@@ -1084,7 +1234,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                             >
                               {isLoading
                                 ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
-                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
+                                : appliedPromo?.percentOff === 100 ? 'Get for Free' : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           )}
                         </div>
