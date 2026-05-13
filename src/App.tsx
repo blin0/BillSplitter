@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Receipt, Sun, Moon, LogOut, Loader2, Menu, Users, EyeOff, UserX, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -77,7 +77,7 @@ function loadJson<T>(key: string, fallback: T): T {
 }
 
 function saveActiveGroup(id: string) {
-  try { localStorage.setItem('billsplitter_active_group', id); } catch (_) {}
+  try { localStorage.setItem('billsplitter_active_group', id); } catch { }
 }
 
 function loadActiveGroup(): string | null {
@@ -96,7 +96,7 @@ function useTheme() {
   function toggle() {
     const next = !document.documentElement.classList.contains('dark');
     document.documentElement.classList.toggle('dark', next);
-    try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch (_) {}
+    try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch { }
     setDark(next);
   }
 
@@ -191,7 +191,7 @@ function AppInner() {
 
   function handleDesktopModalChange(val: boolean) {
     setDesktopExpenseModal(val);
-    try { localStorage.setItem('billsplitter_desktop_modal', JSON.stringify(val)); } catch (_) {}
+    try { localStorage.setItem('billsplitter_desktop_modal', JSON.stringify(val)); } catch { }
   }
 
   const isProfilePage   = location.pathname === '/profile';
@@ -208,12 +208,12 @@ function AppInner() {
 
   useEffect(() => {
     if (user) return;
-    try { localStorage.setItem('billsplitter_participants', JSON.stringify(guestParticipants)); } catch (_) {}
+    try { localStorage.setItem('billsplitter_participants', JSON.stringify(guestParticipants)); } catch { }
   }, [guestParticipants, user]);
 
   useEffect(() => {
     if (user) return;
-    try { localStorage.setItem('billsplitter_expenses', JSON.stringify(guestExpenses)); } catch (_) {}
+    try { localStorage.setItem('billsplitter_expenses', JSON.stringify(guestExpenses)); } catch { }
   }, [guestExpenses, user]);
 
   // ── Signed-in state (Supabase) ─────────────────────────────────────────────
@@ -247,11 +247,11 @@ function AppInner() {
         setCurrency(data.defaultCurrency as CurrencyCode);
       }
       // Seed default tax rate into localStorage so ExpenseForm can read it instantly
-      try { localStorage.setItem(`bsp_tax_${user.id}`, String(data.defaultTaxRate ?? 0)); } catch (_) {}
+      try { localStorage.setItem(`bsp_tax_${user.id}`, String(data.defaultTaxRate ?? 0)); } catch { }
       // Sync language preference from profile (overrides browser-detected lang)
       if (data.languagePreference && data.languagePreference !== i18n.language) {
         void i18n.changeLanguage(data.languagePreference);
-        try { localStorage.setItem(LANG_STORAGE_KEY, data.languagePreference); } catch (_) {}
+        try { localStorage.setItem(LANG_STORAGE_KEY, data.languagePreference); } catch { }
         applyLangToDOM(data.languagePreference);
       }
       // Profile table avatar takes priority; fall back to OAuth metadata avatar
@@ -567,10 +567,12 @@ function AppInner() {
   }
 
   // Keep a stable ref so GroupRouteSync can call it without re-subscribing
-  handleGroupSyncRef.current = (id: string) => {
-    setActiveGroupId(id);
-    saveActiveGroup(id);
-  };
+  useLayoutEffect(() => {
+    handleGroupSyncRef.current = (id: string) => {
+      setActiveGroupId(id);
+      saveActiveGroup(id);
+    };
+  });
   const stableGroupSync = useCallback((id: string) => handleGroupSyncRef.current(id), []);
 
   // ── Participant handlers ───────────────────────────────────────────────────
@@ -817,7 +819,7 @@ function AppInner() {
 
   function dismissOnboarding() {
     if (user) {
-      try { localStorage.setItem(`billsplitter_onboarding_seen_${user.id}`, 'true'); } catch (_) {}
+      try { localStorage.setItem(`billsplitter_onboarding_seen_${user.id}`, 'true'); } catch { }
     }
     setOnboardingDismissed(true);
   }
