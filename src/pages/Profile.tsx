@@ -1153,6 +1153,12 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                   </>
                                 ) : (
                                   /* ── Active plan: hover reveals Cancel Plan ── */
+                                  <>
+                                    {periodEndDate && (
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                                        Renews on {periodEndDate}
+                                      </p>
+                                    )}
                                   <button
                                     onClick={cancelLoading ? undefined : () => openCancelModal(name)}
                                     disabled={cancelLoading}
@@ -1176,6 +1182,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                       </>
                                     )}
                                   </button>
+                                  </>
                                 )}
 
                                 {cancelError && (
