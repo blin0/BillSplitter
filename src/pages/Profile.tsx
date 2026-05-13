@@ -866,6 +866,13 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                       );
                     }
 
+                    function applyDiscount(priceStr: string, percentOff: number): string {
+                      const num = parseFloat(priceStr.replace('$', ''));
+                      if (isNaN(num)) return priceStr;
+                      const discounted = num * (1 - percentOff / 100);
+                      return discounted === 0 ? '$0' : `$${discounted.toFixed(2)}`;
+                    }
+
                     // ── Tier card ─────────────────────────────────────────────
                     type TierCardProps = {
                       tier:         'free' | 'pro' | 'premier';
@@ -953,20 +960,39 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                                   <del className="text-sm font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
                                     {monthlyPrice}
                                   </del>
-                                  <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
-                                    {yearlyMonthly}
+                                  {appliedPromo && (
+                                    <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                      {yearlyMonthly}
+                                    </del>
+                                  )}
+                                  <p className={cn('text-3xl font-extrabold leading-none', appliedPromo ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                    {appliedPromo ? applyDiscount(yearlyMonthly, appliedPromo.percentOff ?? 0) : yearlyMonthly}
                                     <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
                                   </p>
                                 </div>
                                 <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-                                  {t('profile.billedYearly', { total: yearlyTotal })}
+                                  {appliedPromo
+                                    ? `Billed ${applyDiscount(yearlyTotal, appliedPromo.percentOff ?? 0)}/yr · ${appliedPromo.label}`
+                                    : t('profile.billedYearly', { total: yearlyTotal })}
                                 </p>
                               </>
                             ) : (
-                              <p className="text-3xl font-extrabold text-gray-900 dark:text-slate-100 leading-none">
-                                {monthlyPrice}
-                                <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
-                              </p>
+                              <>
+                                <div className="flex items-baseline gap-2">
+                                  {appliedPromo && (
+                                    <del className="text-lg font-medium text-gray-400 dark:text-slate-500 line-through [text-decoration-thickness:1.5px]">
+                                      {monthlyPrice}
+                                    </del>
+                                  )}
+                                  <p className={cn('text-3xl font-extrabold leading-none', appliedPromo ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                                    {appliedPromo ? applyDiscount(monthlyPrice, appliedPromo.percentOff ?? 0) : monthlyPrice}
+                                    <span className="text-sm font-normal text-gray-400 dark:text-slate-500">{t('profile.perMonth')}</span>
+                                  </p>
+                                </div>
+                                {appliedPromo && (
+                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{appliedPromo.label} applied</p>
+                                )}
+                              </>
                             )}
                           </div>
 
@@ -1080,7 +1106,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                             >
                               {isLoading
                                 ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
-                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
+                                : appliedPromo?.percentOff === 100 ? 'Get for Free' : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           ) : (
                             <button
@@ -1096,7 +1122,7 @@ export default function Profile({ authEmail, authName, userId, desktopExpenseMod
                             >
                               {isLoading
                                 ? <span className="flex items-center justify-center gap-1.5"><Loader2 size={13} className="animate-spin" />{t('profile.opening')}</span>
-                                : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
+                                : appliedPromo?.percentOff === 100 ? 'Get for Free' : currentTier === 'free' ? t('profile.upgrade') : t('profile.switchPlan')}
                             </button>
                           )}
                         </div>
