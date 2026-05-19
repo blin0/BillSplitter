@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Reorder } from 'framer-motion';
-import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent, MessageSquare, Upload, ImagePlus, GripVertical } from 'lucide-react';
+import { Check, Copy, ChevronRight, X, Users, ChevronDown, UserMinus, AlertTriangle, LogOut, Trash2, User, Plus, Hash, Loader2, Sparkles, Lock, BarChart3, Percent, MessageSquare, Upload, ImagePlus, GripVertical, LayoutDashboard } from 'lucide-react';
 import { GroupIconDisplay, GROUP_ICON_DEFS } from '../lib/groupIcons';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
@@ -28,6 +28,8 @@ interface Props {
   onGroupDeleted:      (groupId: string) => void;
   /** Navigate to the Profile page */
   onOpenProfile:       () => void;
+  /** Navigate to the Dashboard page */
+  onOpenDashboard?:    () => void;
   /** Navigate to the Analytics page */
   onOpenAnalytics:     () => void;
   /** Navigate to the Feedback dashboard (dev tier only) */
@@ -254,6 +256,7 @@ export default function GroupSidebar({
   onGroupLeft,
   onGroupDeleted,
   onOpenProfile,
+  onOpenDashboard,
   onOpenAnalytics,
   onOpenFeedback,
   onGroupTaxRateChanged,
@@ -261,6 +264,7 @@ export default function GroupSidebar({
 }: Props) {
   const { t } = useTranslation();
   const location       = useLocation();
+  const isDashboardPage = location.pathname === '/dashboard';
   const isProfilePage   = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname.startsWith('/analytics');
   const isFeedbackPage  = location.pathname === '/feedback';
@@ -1156,8 +1160,23 @@ export default function GroupSidebar({
           onChange={handleIconUpload}
         />
 
-        {/* ── Footer (Analytics + Profile) ── */}
+        {/* ── Footer (Dashboard + Analytics + Profile) ── */}
         <div className="shrink-0 border-t border-gray-100 dark:border-slate-800 p-2 space-y-0.5">
+          {onOpenDashboard && (
+            <button
+              type="button"
+              onClick={() => { onOpenDashboard(); onClose(); }}
+              className={cn(
+                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                isDashboardPage
+                  ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-semibold'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-700 dark:hover:text-violet-300',
+              )}
+            >
+              <LayoutDashboard size={15} className="shrink-0" />
+              Dashboard
+            </button>
+          )}
           <button
             type="button"
             onClick={() => { onOpenAnalytics(); onClose(); }}

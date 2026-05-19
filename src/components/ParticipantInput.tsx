@@ -1,6 +1,25 @@
 import { useState } from 'react';
 import { UserPlus, X, Lock, UserCheck, Link2, Link2Off } from 'lucide-react';
 import type { Participant } from '../types';
+
+function LinkedAvatar({ src, initial }: { src: string | null; initial: string }) {
+  const [err, setErr] = useState(false);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt={initial}
+        onError={() => setErr(true)}
+        className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-300/50 dark:border-emerald-700/50"
+      />
+    );
+  }
+  return (
+    <span className="w-4 h-4 rounded-full bg-emerald-600 dark:bg-emerald-700 flex items-center justify-center text-[8px] font-bold text-white shrink-0">
+      {initial}
+    </span>
+  );
+}
 import { cn } from '../lib/cn';
 import { round2 } from '../utils/calculations';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +39,8 @@ interface Props {
   onUnlink?:      () => void;
   /** When false, the "This is me" feature is unavailable (guest mode). */
   identityEnabled?: boolean;
+  /** Avatar URL of the signed-in user — shown on the linked member chip. */
+  linkedAvatarUrl?: string | null;
 }
 
 export default function ParticipantInput({
@@ -32,6 +53,7 @@ export default function ParticipantInput({
   onLink,
   onUnlink,
   identityEnabled = false,
+  linkedAvatarUrl = null,
 }: Props) {
   const [input, setInput] = useState('');
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
@@ -98,7 +120,12 @@ export default function ParticipantInput({
                     : 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-100 dark:border-violet-900/50',
                 )}
               >
-                {isLinked && <UserCheck size={12} className="shrink-0" />}
+                {isLinked && (
+                  <LinkedAvatar
+                    src={linkedAvatarUrl ?? null}
+                    initial={(p.name.trim()[0] ?? '?').toUpperCase()}
+                  />
+                )}
                 {p.name}
 
                 {/* ── "This is me" / "Unlink" button (identity feature) ── */}

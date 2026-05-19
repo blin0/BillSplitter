@@ -14,8 +14,9 @@ interface MemberRow {
 }
 
 interface Props {
-  onSkip:     () => void;
-  onComplete: (group: GroupInfo) => void;
+  onSkip:       () => void;
+  onComplete:   (group: GroupInfo) => void;
+  initialStep?: number;
 }
 
 const slideVariants = {
@@ -54,11 +55,11 @@ function resizeImageToDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function OnboardingFlow({ onSkip, onComplete }: Props) {
+export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: Props) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step,         setStep        ] = useState(0);
+  const [step,         setStep        ] = useState(initialStep);
   const [dir,          setDir         ] = useState(1);
   const [groupName,    setGroupName   ] = useState('');
   // selectedIcon is either a GROUP_ICON_DEFS name like "Globe" or a data: URL
@@ -271,10 +272,10 @@ export default function OnboardingFlow({ onSkip, onComplete }: Props) {
 
                   <div className="flex gap-3">
                     <button
-                      onClick={() => go(0)}
+                      onClick={() => initialStep >= 1 ? onSkip() : go(0)}
                       className="flex-1 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors border border-slate-700/60"
                     >
-                      Back
+                      {initialStep >= 1 ? 'Cancel' : 'Back'}
                     </button>
                     <button
                       onClick={() => go(2)}
@@ -392,7 +393,7 @@ export default function OnboardingFlow({ onSkip, onComplete }: Props) {
 
           {/* Progress dots */}
           <div className="flex items-center justify-center gap-2 pb-6 pt-1">
-            {[0, 1, 2].map(i => (
+            {(initialStep >= 1 ? [1, 2] : [0, 1, 2]).map(i => (
               <div
                 key={i}
                 className={cn(

@@ -36,6 +36,7 @@ import OnboardingTour, { useOnboardingTour } from './components/OnboardingTour';
 import OnboardingFlow from './components/OnboardingFlow';
 import Profile from './pages/Profile';
 import Analytics from './pages/Analytics';
+import HomeDashboard from './pages/HomeDashboard';
 import Landing from './pages/Landing';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -181,6 +182,7 @@ function AppInner() {
   const [sidebarOpen,          setSidebarOpen         ] = useState(false);
   const [showExpenseModal,     setShowExpenseModal    ] = useState(false);
   const [showOnboardingModal,  setShowOnboardingModal ] = useState(false);
+  const [onboardingInitialStep, setOnboardingInitialStep] = useState(0);
   const [editingExpense,       setEditingExpense      ] = useState<Expense | null>(null);
   const [linkedMemberId,       setLinkedMemberId      ] = useState<string | null>(null);
   const [desktopExpenseModal,  setDesktopExpenseModal ] = useState(() =>
@@ -194,6 +196,7 @@ function AppInner() {
     try { localStorage.setItem('billsplitter_desktop_modal', JSON.stringify(val)); } catch { }
   }
 
+  const isDashboardPage = location.pathname === '/dashboard';
   const isProfilePage   = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname.startsWith('/analytics');
   const isFeedbackPage  = location.pathname === '/feedback';
@@ -856,6 +859,7 @@ function AppInner() {
           onGroupLeft={handleGroupLeft}
           onGroupDeleted={handleGroupDeleted}
           onOpenProfile={() => navigate('/profile')}
+          onOpenDashboard={() => navigate('/dashboard')}
           onOpenAnalytics={handleOpenAnalytics}
           onOpenFeedback={() => navigate('/feedback')}
           onGroupTaxRateChanged={handleGroupTaxRateChanged}
@@ -1019,10 +1023,22 @@ function AppInner() {
               <FeedbackDashboard />
             </ProtectedRoute>
           } />
+
+          {/* Home dashboard */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <HomeDashboard
+                groups={groups}
+                groupsLoading={groupsLoading}
+                onSelectGroup={handleSelectGroup}
+                onOpenOnboarding={() => { setOnboardingInitialStep(1); setShowOnboardingModal(true); }}
+              />
+            </ProtectedRoute>
+          } />
         </Routes>
 
         {/* ── Dashboard content — visible for all non-profile/non-analytics routes ── */}
-        {!isProfilePage && !isAnalyticsPage && !isFeedbackPage && (<>
+        {!isProfilePage && !isAnalyticsPage && !isFeedbackPage && !isDashboardPage && (<>
 
           <OfflineBanner />
 
@@ -1159,6 +1175,7 @@ function AppInner() {
                       onLink={handleLink}
                       onUnlink={handleUnlink}
                       identityEnabled={isSignedIn}
+                      linkedAvatarUrl={profileAvatar}
                     />
                   </div>
                   <div className="order-2">
@@ -1276,13 +1293,16 @@ function AppInner() {
 
       {(showOnboarding || showOnboardingModal) && (
         <OnboardingFlow
+          initialStep={showOnboarding ? 0 : onboardingInitialStep}
           onSkip={() => {
             if (showOnboarding) dismissOnboarding();
             setShowOnboardingModal(false);
+            setOnboardingInitialStep(0);
           }}
           onComplete={(group) => {
             if (showOnboarding) dismissOnboarding();
             setShowOnboardingModal(false);
+            setOnboardingInitialStep(0);
             handleGroupAdded(group);
           }}
         />
