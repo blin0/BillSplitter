@@ -31,16 +31,16 @@ const CATS = ['Dining', 'Coffee', 'Groceries', 'Travel', 'Bills', 'Misc'] as con
 type Cat = typeof CATS[number];
 
 const SLICE_COLORS: Record<Cat, string> = {
-  Dining:    '#8b5cf6',
-  Coffee:    '#7c3aed',
-  Groceries: '#a78bfa',
-  Travel:    '#6d28d9',
-  Bills:     '#c4b5fd',
-  Misc:      '#4c1d95',
+  Dining:    '#8B6B60',
+  Coffee:    '#5E4540',
+  Groceries: '#A89080',
+  Travel:    '#7A5A50',
+  Bills:     '#C4ADA2',
+  Misc:      '#3E2E2A',
 };
 
-const TAX_COLOR = '#06b6d4';
-const TIP_COLOR = '#f59e0b';
+const TAX_COLOR = '#507860';
+const TIP_COLOR = '#8B7020';
 
 // Smooth ease matching Material Design "standard" curve
 const EASE_STD = [0.4, 0, 0.2, 1] as const;
@@ -1084,8 +1084,8 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
           <AreaChart data={data} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="velGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={isDark ? 0.5 : 0.3} />
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                <stop offset="5%"  stopColor="#7A6058" stopOpacity={isDark ? 0.5 : 0.3} />
+                <stop offset="95%" stopColor="#7A6058" stopOpacity={0} />
               </linearGradient>
               <filter id="lineGlow" x="-20%" y="-100%" width="140%" height="300%">
                 <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
@@ -1109,7 +1109,7 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
                       style={{
                         background:  'var(--analytics-tooltip-bg)',
                         border:      '1px solid var(--analytics-tooltip-border)',
-                        boxShadow:   '0 20px 60px rgba(109,40,217,0.15)',
+                        boxShadow:   '0 20px 60px rgba(122,96,88,0.12)',
                       }}
                     >
                       <p className="text-gray-400 dark:text-slate-400 mb-0.5">{label as string}</p>
@@ -1132,9 +1132,9 @@ function WidgetVelocity({ expenses, fmt, loading, convert, currency, isDark }: {
             )}
             <Area
               type="monotone" dataKey="amount"
-              stroke="#8b5cf6" strokeWidth={2.5}
+              stroke="#7A6058" strokeWidth={2.5}
               fill="url(#velGrad)" filter="url(#lineGlow)"
-              dot={false} activeDot={isMobile ? false : { r: 4, fill: '#a78bfa', strokeWidth: 0 }}
+              dot={false} activeDot={isMobile ? false : { r: 4, fill: '#A08880', strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>

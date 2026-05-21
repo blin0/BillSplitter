@@ -25,7 +25,7 @@ html, body {
    The inline <script> in index.html adds the `dark` class synchronously,
    so these rules apply on the very first paint.                            ── */
 html {
-  background-color: rgb(249, 250, 251); /* gray-50  — light mode */
+  background-color: #F7F7F5; /* Alabaster Stone canvas — light mode */
 }
 html.dark {
   background-color: rgb(2, 6, 23);      /* slate-950 — dark mode */
@@ -232,19 +232,19 @@ input[type='number'] {
 /* ── Analytics Design Tokens ──────────────────────────────────────────────── */
 
 :root {
-  --analytics-card-bg:        rgb(255, 255, 255);
-  --analytics-card-border:    rgb(243, 244, 246);
-  --analytics-tooltip-bg:     rgb(255, 255, 255);
-  --analytics-tooltip-border: rgb(229, 231, 235);
-  --analytics-dropdown-bg:    rgb(255, 255, 255);
+  --analytics-card-bg:        #FFFFFF;
+  --analytics-card-border:    #EAE9E4;
+  --analytics-tooltip-bg:     #FFFFFF;
+  --analytics-tooltip-border: #EAE9E4;
+  --analytics-dropdown-bg:    #FFFFFF;
   --analytics-dropdown-item:  rgba(0, 0, 0, 0.04);
-  --analytics-chart-grid:     rgba(0, 0, 0, 0.06);
-  --analytics-chart-tick:     #94a3b8;
-  --analytics-donut-hole:     rgb(249, 250, 251);
-  --analytics-sub-row:        rgb(249, 250, 251);
-  --analytics-divider:        rgb(243, 244, 246);
-  --analytics-toggle-bg:      rgb(243, 244, 246);
-  --analytics-toggle-border:  rgb(229, 231, 235);
+  --analytics-chart-grid:     rgba(0, 0, 0, 0.05);
+  --analytics-chart-tick:     #A8A49D;
+  --analytics-donut-hole:     #F7F7F5;
+  --analytics-sub-row:        #F7F7F5;
+  --analytics-divider:        #EAE9E4;
+  --analytics-toggle-bg:      #EAE9E4;
+  --analytics-toggle-border:  #EAE9E4;
 }
 
 .dark {
@@ -275,4 +275,20 @@ input[type='number'] {
 .recharts-wrapper svg:focus,
 .recharts-wrapper svg *:focus {
   outline: none !important;
+}
+
+/* ── Alabaster Stone: slate-* utility overrides for light mode ────────────── */
+/* slate-* classes are used in components without dark: prefix; remap them to  */
+/* warm stone equivalents so light mode stays cohesive.                        */
+html:not(.dark) .bg-slate-50    { background-color: #F7F7F5; }
+html:not(.dark) .bg-slate-100   { background-color: #EAE9E4; }
+html:not(.dark) .border-slate-100 { border-color: #EAE9E4; }
+html:not(.dark) .border-slate-200 { border-color: #E0DED8; }
+html:not(.dark) .hover\:bg-slate-50:hover  { background-color: #F2F1EC; }
+html:not(.dark) .hover\:bg-slate-100:hover { background-color: #EAE9E4; }
+
+/* ── Softer card shadow in light mode ─────────────────────────────────────── */
+html:not(.dark) .shadow-sm {
+  --tw-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.07);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
