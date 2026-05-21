@@ -200,6 +200,7 @@ function AppInner() {
   const isProfilePage   = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname.startsWith('/analytics');
   const isFeedbackPage  = location.pathname === '/feedback';
+  const isTryPage       = location.pathname === '/try';
 
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
@@ -898,25 +899,21 @@ function AppInner() {
 
             {/* Logo + title — clickable when signed in: back on special pages, home/onboarding on main */}
             <div
-              className={`flex items-center gap-2 flex-1 min-w-0${
-                isSignedIn
-                  ? ' cursor-pointer rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors -ml-1 px-1 py-0.5'
-                  : ''
-              }`}
-              onClick={isSignedIn ? () => {
+              className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors -ml-1 px-1 py-0.5"
+              onClick={() => {
+                if (!isSignedIn) { navigate('/'); return; }
                 if (isProfilePage || isAnalyticsPage || isFeedbackPage) navigate(-1);
                 else setShowOnboardingModal(true);
-              } : undefined}
-              role={isSignedIn ? 'button' : undefined}
-              tabIndex={isSignedIn ? 0 : undefined}
-              onKeyDown={isSignedIn
-                ? (e) => {
-                    if (e.key !== 'Enter' && e.key !== ' ') return;
-                    if (isProfilePage || isAnalyticsPage || isFeedbackPage) navigate(-1);
-                    else setShowOnboardingModal(true);
-                  }
-                : undefined}
-              aria-label={isSignedIn ? (isProfilePage || isAnalyticsPage || isFeedbackPage ? 'Back' : 'Home') : undefined}
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (!isSignedIn) { navigate('/'); return; }
+                if (isProfilePage || isAnalyticsPage || isFeedbackPage) navigate(-1);
+                else setShowOnboardingModal(true);
+              }}
+              aria-label={isSignedIn ? (isProfilePage || isAnalyticsPage || isFeedbackPage ? 'Back' : 'Home') : 'Go to landing page'}
             >
               <img src="/favicon.svg" alt="Axiom Splits" className="w-9 h-9 shrink-0" />
 
@@ -1024,21 +1021,34 @@ function AppInner() {
             </ProtectedRoute>
           } />
 
-          {/* Home dashboard */}
+          {/* Home dashboard — accessible without auth; banner prompts sign-in */}
           <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <HomeDashboard
-                groups={groups}
-                groupsLoading={groupsLoading}
-                onSelectGroup={handleSelectGroup}
-                onOpenOnboarding={() => { setOnboardingInitialStep(1); setShowOnboardingModal(true); }}
-              />
-            </ProtectedRoute>
+            <HomeDashboard
+              groups={groups}
+              groupsLoading={groupsLoading}
+              onSelectGroup={handleSelectGroup}
+              onOpenOnboarding={() => { setOnboardingInitialStep(1); setShowOnboardingModal(true); }}
+              onSignIn={() => setShowSignIn(true)}
+            />
           } />
         </Routes>
 
         {/* ── Dashboard content — visible for all non-profile/non-analytics routes ── */}
         {!isProfilePage && !isAnalyticsPage && !isFeedbackPage && !isDashboardPage && (<>
+
+          {isTryPage && !isSignedIn && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-violet-600/10 border-b border-violet-500/20 text-sm">
+              <span className="text-violet-700 dark:text-violet-300 font-medium">
+                Sign in to save your progress and access your groups from any device.
+              </span>
+              <button
+                onClick={() => setShowSignIn(true)}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+              >
+                Sign In
+              </button>
+            </div>
+          )}
 
           <OfflineBanner />
 
