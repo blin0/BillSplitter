@@ -202,6 +202,13 @@ function AppInner() {
   const isFeedbackPage  = location.pathname === '/feedback';
   const isTryPage       = location.pathname === '/try';
 
+  // Force dark mode on /try when visitor has no stored theme preference
+  useEffect(() => {
+    if (!isTryPage) return;
+    const stored = localStorage.getItem('theme');
+    if (stored === null && !dark) toggle();
+  }, [isTryPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Guest state (localStorage) ─────────────────────────────────────────────
   const [guestParticipants, setGuestParticipants] = useState<Participant[]>(() =>
     loadJson<Participant[]>('billsplitter_participants', [])
