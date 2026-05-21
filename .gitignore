@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 .gstack/
 .mcp.json
+playwright/.auth/
