@@ -12,6 +12,7 @@ import {
 import { GroupIconDisplay } from '../lib/groupIcons';
 import { fetchPersonalExpenses, type GroupInfo, type PersonalData, type PersonalExpense } from '../lib/db';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/cn';
 import { round2 } from '../utils/calculations';
 
@@ -216,22 +217,25 @@ interface Props {
   groupsLoading:    boolean;
   onSelectGroup:    (id: string) => void;
   onOpenOnboarding: () => void;
+  onSignIn?:        () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, onOpenOnboarding }: Props) {
+export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, onOpenOnboarding, onSignIn }: Props) {
   const { formatPrice } = useCurrency();
+  const { user } = useAuth();
   const isDark = useIsDark();
   const [personalData,    setPersonalData   ] = useState<PersonalData | null>(null);
   const [loadingPersonal, setLoadingPersonal] = useState(true);
 
   useEffect(() => {
+    if (!user) { setLoadingPersonal(false); return; }
     fetchPersonalExpenses().then(({ data }) => {
       setPersonalData(data);
       setLoadingPersonal(false);
     });
-  }, []);
+  }, [user]);
 
   const groupBalances = useMemo(
     () => (personalData ? computeGroupBalances(personalData) : {}),
@@ -277,7 +281,21 @@ export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, on
   // ── Empty state ────────────────────────────────────────────────────────────
   if (groups.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-73px)] px-4 py-12">
+      <>
+        {!user && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-violet-600/10 border-b border-violet-500/20 text-sm">
+            <span className="text-violet-700 dark:text-violet-300 font-medium">
+              Sign in to save your progress and access your groups from any device.
+            </span>
+            <button
+              onClick={onSignIn}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        )}
+        <div className="flex items-center justify-center min-h-[calc(100dvh-73px)] px-4 py-12">
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -305,12 +323,27 @@ export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, on
           </button>
         </motion.div>
       </div>
+      </>
     );
   }
 
   // ── Main layout ────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5 p-6">
+    <>
+      {!user && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-violet-600/10 border-b border-violet-500/20 text-sm">
+          <span className="text-violet-700 dark:text-violet-300 font-medium">
+            Sign in to save your progress and access your groups from any device.
+          </span>
+          <button
+            onClick={onSignIn}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+          >
+            Sign In
+          </button>
+        </div>
+      )}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5 p-6">
 
       {/* ── KPI row (full width) ── */}
       <motion.div
@@ -653,5 +686,6 @@ export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, on
       </aside>
 
     </div>
+    </>
   );
 }

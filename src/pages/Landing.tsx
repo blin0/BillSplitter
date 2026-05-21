@@ -1186,7 +1186,7 @@ export default function Landing() {
             {t('landing.nav.signIn')}
           </button>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/try')}
             className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-colors"
           >
             {t('landing.nav.getStarted')}
@@ -1235,7 +1235,7 @@ export default function Landing() {
           className="flex flex-col sm:flex-row items-center gap-4 mb-14"
         >
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/try')}
             className="px-8 py-3.5 rounded-xl text-base font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 transition-all shadow-lg shadow-violet-900/40 w-full sm:w-auto text-center"
           >
             {t('landing.hero.ctaPrimary')}
@@ -1506,7 +1506,7 @@ export default function Landing() {
                 {t('landing.cta.subtitle')}
               </p>
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/try')}
                 className="px-10 py-4 rounded-xl text-base font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 transition-all shadow-lg shadow-violet-900/40"
               >
                 {t('landing.cta.button')}
