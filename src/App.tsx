@@ -42,6 +42,7 @@ import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProtectedRoute from './components/ProtectedRoute';
 import ResetPassword from './pages/ResetPassword';
+import LoginPage from './pages/LoginPage';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
   fetchUserGroups,
@@ -1366,6 +1367,7 @@ export default function App() {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/*" element={
             <CurrencyProvider>
               <AppInner />
