@@ -29,6 +29,20 @@ function queryRect(selector: string): DOMRect | null {
   }
 }
 
+function useIsDark(): boolean {
+  const [dark, setDark] = useState(() =>
+    document.documentElement.classList.contains('dark'),
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() =>
+      setDark(document.documentElement.classList.contains('dark')),
+    );
+    observer.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+}
+
 // ─── Hook — call this in AppInner to gate visibility ─────────────────────────
 
 export function useOnboardingTour(ready: boolean) {
@@ -59,6 +73,7 @@ interface Props {
 
 export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Props) {
   const { t } = useTranslation();
+  const isDark = useIsDark();
   const [step,       setStep      ] = useState(0);
   const [rect,       setRect      ] = useState<DOMRect | null>(null);
   const [visible,    setVisible   ] = useState(false);
@@ -93,7 +108,6 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
 
   const current = STEPS[step];
 
-  // Measure target element; re-measure on resize / scroll
   useEffect(() => {
     let raf: number;
 
@@ -103,7 +117,6 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
       setVisible(!!r);
     }
 
-    // Small delay so the DOM has settled after step transition
     raf = requestAnimationFrame(() => { measure(); });
 
     window.addEventListener('resize', measure);
@@ -125,7 +138,6 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
     }
   }
 
-  // Tooltip position — keeps the bubble on-screen, clamped to 90vw
   function tooltipStyle(): React.CSSProperties {
     const effectiveW = Math.min(TOOLTIP_W, window.innerWidth * 0.9);
 
@@ -146,11 +158,10 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
     if (current.placement === 'bottom') {
       return { position: 'fixed', top: hl.bottom + 12, left: centreX };
     }
-    // default: 'top'
     return { position: 'fixed', bottom: window.innerHeight - hl.top + 12, left: centreX };
   }
 
-  // ── Sign-up nudge (final card — centered, no highlight) ──────────────────────
+  // ── Sign-up nudge ──────────────────────────────────────────────────────────
   if (showSignup) return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-6"
@@ -158,14 +169,14 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
       aria-modal="true"
       aria-label={t('tour.saveTitle')}
     >
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70" onClick={onDone} />
 
       <motion.div
         className="relative w-full max-w-xs rounded-2xl flex flex-col overflow-hidden"
         style={{
-          background: 'rgba(15,10,30,0.98)',
-          border: '1px solid rgba(255,255,255,0.10)',
+          background: isDark ? 'rgba(15,10,30,0.98)' : 'rgba(255,255,255,0.98)',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}`,
+          boxShadow: isDark ? undefined : '0 8px 40px rgba(0,0,0,0.12)',
           maxWidth: '90vw',
           maxHeight: '85vh',
         }}
@@ -174,35 +185,31 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Top sheen */}
         <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-violet-600/15 to-transparent pointer-events-none z-10" />
 
         <div className="relative p-6 overflow-y-auto flex-1 min-h-0">
-          {/* Icon */}
           <div className="flex justify-center mb-4">
-            <div className="p-3 rounded-2xl bg-violet-600/20 border border-violet-500/30">
-              <Sparkles size={22} className="text-violet-300" />
+            <div className="p-3 rounded-2xl bg-violet-100 dark:bg-violet-600/20 border border-violet-200 dark:border-violet-500/30">
+              <Sparkles size={22} className="text-violet-500 dark:text-violet-300" />
             </div>
           </div>
 
-          <h3 className="text-base font-bold text-white text-center mb-2 leading-snug">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white text-center mb-2 leading-snug">
             {t('tour.saveTitle')}
           </h3>
-          <p className="text-xs text-slate-400 text-center leading-relaxed mb-5">
+          <p className="text-xs text-gray-500 dark:text-slate-400 text-center leading-relaxed mb-5">
             {t('tour.saveDesc')}
           </p>
 
-          {/* Perks */}
           <ul className="space-y-1.5 mb-5">
             {([1, 2, 3] as const).map(n => (
-              <li key={n} className="flex items-center gap-2 text-[11px] text-slate-300">
-                <CheckCircle size={12} className="text-violet-400 shrink-0" />
+              <li key={n} className="flex items-center gap-2 text-[11px] text-gray-700 dark:text-slate-300">
+                <CheckCircle size={12} className="text-violet-500 dark:text-violet-400 shrink-0" />
                 {t(`tour.perk${n}`)}
               </li>
             ))}
           </ul>
 
-          {/* Buttons */}
           <button
             onClick={() => { onDone(); onSignUp?.(); }}
             className="w-full py-2.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition-colors mb-2.5"
@@ -211,7 +218,7 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
           </button>
           <button
             onClick={onDone}
-            className="w-full py-2 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+            className="w-full py-2 text-[11px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors"
           >
             {t('tour.continueGuest')}
           </button>
@@ -231,7 +238,6 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex: 9999 }} role="dialog" aria-modal="true" aria-label={t('tour.ariaLabel')}>
 
-      {/* ── SVG overlay with rectangular cutout ── */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         xmlns="http://www.w3.org/2000/svg"
@@ -254,7 +260,6 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
         />
       </svg>
 
-      {/* ── Violet highlight ring around target ── */}
       <div
         className="absolute pointer-events-none rounded-xl"
         style={{
@@ -267,10 +272,8 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
         }}
       />
 
-      {/* ── Backdrop click = dismiss ── */}
       <div className="absolute inset-0" onClick={onDone} />
 
-      {/* ── Tooltip bubble ── */}
       <motion.div
         key={step}
         className="absolute rounded-2xl shadow-2xl flex flex-col overflow-hidden"
@@ -280,20 +283,18 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
           maxWidth: '90vw',
           maxHeight: '85vh',
           pointerEvents: 'auto',
-          background: 'rgba(15,10,30,0.97)',
-          border: '1px solid rgba(255,255,255,0.10)',
+          background: isDark ? 'rgba(15,10,30,0.97)' : 'rgba(255,255,255,0.98)',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}`,
+          boxShadow: isDark ? undefined : '0 8px 40px rgba(0,0,0,0.12)',
         }}
         initial={{ opacity: 0, y: current.placement === 'bottom' ? -6 : 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Top sheen */}
         <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-violet-600/10 to-transparent pointer-events-none z-10" />
 
-        {/* Scrollable content area */}
         <div className="relative flex flex-col flex-1 min-h-0 p-5">
-          {/* Progress dots + close — always at top */}
           <div className="flex items-center justify-between mb-3.5 shrink-0">
             <div className="flex items-center gap-1.5">
               {STEPS.map((_, i) => (
@@ -303,34 +304,36 @@ export default function OnboardingTour({ onDone, showSignupStep, onSignUp }: Pro
                   style={{
                     height: 4,
                     width:  i === step ? 20 : 8,
-                    background: i === step ? '#7c3aed' : i < step ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.1)',
+                    background: i === step
+                      ? '#7c3aed'
+                      : i < step
+                        ? 'rgba(124,58,237,0.4)'
+                        : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
                   }}
                 />
               ))}
-              <span className="ml-1 text-[10px] font-mono text-slate-600">
+              <span className="ml-1 text-[10px] font-mono text-gray-400 dark:text-slate-600">
                 {step + 1}/{STEPS.length}
               </span>
             </div>
             <button
               onClick={onDone}
-              className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 hover:text-white hover:bg-white/[0.08] transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400 dark:text-slate-500 hover:text-gray-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
               aria-label={t('common.close')}
             >
               <X size={12} />
             </button>
           </div>
 
-          {/* Scrollable body */}
           <div className="overflow-y-auto flex-1 min-h-0 mb-4">
-            <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{current.title}</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">{current.body}</p>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5 leading-snug">{current.title}</h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">{current.body}</p>
           </div>
 
-          {/* Nav buttons — always pinned to bottom */}
-          <div className="flex items-center justify-between shrink-0 pt-1 border-t border-white/[0.06]">
+          <div className="flex items-center justify-between shrink-0 pt-1 border-t border-gray-100 dark:border-white/[0.06]">
             <button
               onClick={onDone}
-              className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+              className="text-[11px] text-gray-400 dark:text-slate-600 hover:text-gray-600 dark:hover:text-slate-400 transition-colors"
             >
               {t('tour.skip')}
             </button>
