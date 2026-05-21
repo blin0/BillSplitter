@@ -585,8 +585,8 @@ export default function GroupSidebar({
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-30 w-64 flex flex-col',
-          'bg-[#F2F1EC] dark:bg-slate-900',
-          'border-r border-[#EAE9E4] dark:border-slate-800',
+          'bg-white dark:bg-slate-900',
+          'border-r border-gray-100 dark:border-slate-800',
           'transform transition-transform duration-200 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
@@ -610,7 +610,7 @@ export default function GroupSidebar({
             <button
               type="button"
               onClick={() => setGroupsOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-[#E8E6E0] dark:hover:bg-slate-800 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             >
               <Users size={14} className="shrink-0" />
               <span className="flex-1 text-left font-medium">{t('sidebar.myGroups')}</span>
@@ -626,7 +626,7 @@ export default function GroupSidebar({
             </button>
 
             {groupsOpen && (
-              <div className="mt-1 rounded-xl bg-[#EAE9E4] dark:bg-slate-800 border border-[#D8D6D0] dark:border-slate-700 overflow-hidden">
+              <div className="mt-1 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 overflow-hidden">
                 {groups.length === 0 ? (
                   <p className="text-xs text-gray-400 dark:text-slate-500 px-3 py-3">{t('sidebar.noGroups')}</p>
                 ) : (
@@ -866,7 +866,7 @@ export default function GroupSidebar({
             <div className="mx-3 mt-3">
               <button
                 onClick={() => setMembersOpen(o => !o)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-[#E8E6E0] dark:hover:bg-slate-800 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Users size={14} className="shrink-0" />
                 <span className="flex-1 text-left font-medium">{t('sidebar.manageMembers')}</span>
@@ -937,7 +937,7 @@ export default function GroupSidebar({
               <button
                 type="button"
                 onClick={() => setTaxOpen(o => !o)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-[#E8E6E0] dark:hover:bg-slate-800 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Percent size={14} className="shrink-0" />
                 <span className="flex-1 text-left font-medium">{t('groups.taxRate')}</span>
@@ -1054,7 +1054,7 @@ export default function GroupSidebar({
             <button
               type="button"
               onClick={() => setAddJoinOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-[#E8E6E0] dark:hover:bg-slate-800 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             >
               <Plus size={14} className="shrink-0" />
               <span className="flex-1 text-left font-medium">{t('sidebar.addJoinGroup')}</span>

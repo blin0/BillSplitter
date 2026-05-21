@@ -21,14 +21,14 @@ const CATS = ['Dining', 'Coffee', 'Groceries', 'Travel', 'Bills', 'Misc'] as con
 type Cat = typeof CATS[number];
 
 const SLICE_COLORS: Record<string, string> = {
-  Dining:    '#8B6B60',
-  Coffee:    '#5E4540',
-  Groceries: '#A89080',
-  Travel:    '#7A5A50',
-  Bills:     '#C4ADA2',
-  Misc:      '#3E2E2A',
-  Tax:       '#507860',
-  Tip:       '#8B7020',
+  Dining:    '#8b5cf6',
+  Coffee:    '#7c3aed',
+  Groceries: '#a78bfa',
+  Travel:    '#6d28d9',
+  Bills:     '#c4b5fd',
+  Misc:      '#4c1d95',
+  Tax:       '#06b6d4',
+  Tip:       '#f59e0b',
 };
 
 const AVATAR_COLORS = [
@@ -624,8 +624,8 @@ export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, on
               <AreaChart data={velocityChartData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="dashVelGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#7A6058" stopOpacity={isDark ? 0.45 : 0.28} />
-                    <stop offset="95%" stopColor="#7A6058" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={isDark ? 0.45 : 0.28} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)'} vertical={false} />
@@ -644,7 +644,7 @@ export default function HomeDashboard({ groups, groupsLoading, onSelectGroup, on
                     );
                   }}
                 />
-                <Area type="monotone" dataKey="amount" stroke="#7A6058" strokeWidth={2} fill="url(#dashVelGrad)" dot={false} activeDot={{ r: 3, fill: '#A08880', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="amount" stroke="#8b5cf6" strokeWidth={2} fill="url(#dashVelGrad)" dot={false} activeDot={{ r: 3, fill: '#a78bfa', strokeWidth: 0 }} />
               </AreaChart>
             </ResponsiveContainer>
           </motion.div>

@@ -882,7 +882,7 @@ function AppInner() {
       >
 
         {/* ── Unified header — always visible ── */}
-        <header className="bg-[#F7F7F5] dark:bg-slate-900 border-b border-[#EAE9E4] dark:border-slate-800 sticky top-0 z-10">
+        <header className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-10">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-2 min-w-0">
 
             {/* Mobile sidebar toggle (signed-in only) */}
