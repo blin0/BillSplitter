@@ -33,8 +33,7 @@
       (function () {
         try {
           var stored = localStorage.getItem('theme');
-          var isDark = stored === 'dark'
-            || (stored === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var isDark = stored !== 'light'; // dark by default; only light if explicitly chosen
           if (isDark) {
             document.documentElement.classList.add('dark');
           } else {

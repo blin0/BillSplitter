@@ -89,7 +89,6 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
     } catch {
       // silently ignore — user can pick an icon instead
     }
-    // Reset so the same file can be re-uploaded if needed
     e.target.value = '';
   }
 
@@ -107,15 +106,12 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
       return;
     }
 
-    // Persist the selected icon
     if (selectedIcon !== 'Globe') {
       await updateGroupIcon(group.id, selectedIcon);
     }
 
-    // Add creator as first named participant
     await insertParticipant(group.id, displayName);
 
-    // Add any additional members that have a name
     const validMembers = members.filter(m => m.name.trim());
     await Promise.all(validMembers.map(m => insertParticipant(group.id, m.name.trim())));
 
@@ -126,7 +122,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden">
 
           <div className="relative">
             <AnimatePresence mode="wait" custom={dir}>
@@ -146,16 +142,16 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                   <div className="flex justify-center mb-6">
                     <div className="relative">
                       <div className="absolute inset-0 rounded-3xl bg-violet-500/20 blur-2xl" />
-                      <div className="relative p-5 rounded-3xl bg-violet-900/30 border border-violet-700/40">
-                        <Users size={36} className="text-violet-400" />
+                      <div className="relative p-5 rounded-3xl bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700/40">
+                        <Users size={36} className="text-violet-500 dark:text-violet-400" />
                       </div>
                     </div>
                   </div>
 
-                  <h1 className="text-2xl font-bold text-white text-center mb-2">
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
                     Welcome to Axiom.
                   </h1>
-                  <p className="text-sm text-slate-400 text-center mb-8 leading-relaxed max-w-xs mx-auto">
+                  <p className="text-sm text-gray-500 dark:text-slate-400 text-center mb-8 leading-relaxed max-w-xs mx-auto">
                     Split expenses effortlessly with groups, smart settlements, and real-time sync.
                   </p>
 
@@ -169,7 +165,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                     </button>
                     <button
                       onClick={onSkip}
-                      className="w-full flex items-center justify-center px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-sm transition-all border border-slate-700/60"
+                      className="w-full flex items-center justify-center px-5 py-3 rounded-2xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white font-medium text-sm transition-all border border-gray-200 dark:border-slate-700/60"
                     >
                       Skip for now
                     </button>
@@ -189,8 +185,8 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                   transition={{ duration: 0.22, ease: EASE }}
                   className="p-8"
                 >
-                  <h2 className="text-xl font-bold text-white mb-1">Name your group</h2>
-                  <p className="text-sm text-slate-400 mb-6 leading-snug">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Name your group</h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 leading-snug">
                     Pick a name and icon that describe what you're splitting.
                   </p>
 
@@ -201,12 +197,11 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                     value={groupName}
                     onChange={e => setGroupName(e.target.value)}
                     maxLength={60}
-                    className="w-full px-4 py-3.5 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 text-white text-base placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all mb-5"
+                    className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 text-gray-900 dark:text-white text-base placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all mb-5"
                   />
 
-                  <p className="text-xs font-medium text-slate-400 mb-3">Choose a group icon</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-slate-400 mb-3">Choose a group icon</p>
 
-                  {/* Icon grid */}
                   <div className="grid grid-cols-5 gap-2 mb-3">
                     {GROUP_ICON_DEFS.map(({ name, label, Icon }) => (
                       <button
@@ -217,8 +212,8 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                         className={cn(
                           'flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl transition-all group',
                           selectedIcon === name && !customThumb
-                            ? 'bg-violet-600 ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-900'
-                            : 'bg-slate-800 hover:bg-slate-700 border border-slate-700/80 hover:border-slate-600',
+                            ? 'bg-violet-600 ring-2 ring-violet-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
+                            : 'bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700/80',
                         )}
                       >
                         <Icon
@@ -228,7 +223,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                             'transition-colors',
                             selectedIcon === name && !customThumb
                               ? 'text-white'
-                              : 'text-slate-400 group-hover:text-slate-200',
+                              : 'text-gray-400 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-200',
                           )}
                         />
                       </button>
@@ -242,8 +237,8 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                       className={cn(
                         'flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl transition-all group border',
                         customThumb
-                          ? 'ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-900 border-transparent'
-                          : 'bg-slate-800 hover:bg-slate-700 border-dashed border-slate-600 hover:border-violet-500',
+                          ? 'ring-2 ring-violet-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 border-transparent'
+                          : 'bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 border-dashed border-gray-300 dark:border-slate-600 hover:border-violet-500',
                       )}
                     >
                       {customThumb ? (
@@ -253,7 +248,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                           className="w-[18px] h-[18px] rounded-full object-cover"
                         />
                       ) : (
-                        <Upload size={18} strokeWidth={1.5} className="text-slate-500 group-hover:text-violet-400 transition-colors" />
+                        <Upload size={18} strokeWidth={1.5} className="text-gray-400 dark:text-slate-500 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors" />
                       )}
                     </button>
                   </div>
@@ -266,14 +261,14 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                     onChange={handleFileUpload}
                   />
 
-                  <p className="text-[11px] text-slate-600 mb-6">
+                  <p className="text-[11px] text-gray-400 dark:text-slate-600 mb-6">
                     Last tile: upload your own image — resized to 128 × 128 px automatically.
                   </p>
 
                   <div className="flex gap-3">
                     <button
                       onClick={() => initialStep >= 1 ? onSkip() : go(0)}
-                      className="flex-1 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors border border-slate-700/60"
+                      className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 text-sm font-medium transition-colors border border-gray-200 dark:border-slate-700/60"
                     >
                       {initialStep >= 1 ? 'Cancel' : 'Back'}
                     </button>
@@ -301,19 +296,19 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                   transition={{ duration: 0.22, ease: EASE }}
                   className="p-8"
                 >
-                  <h2 className="text-xl font-bold text-white mb-1">Add group members</h2>
-                  <p className="text-sm text-slate-400 mb-5 leading-snug">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Add group members</h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 leading-snug">
                     Who's splitting expenses with you?
                   </p>
 
                   {/* Creator row — auto-added */}
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-violet-900/20 border border-violet-700/30 mb-3">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 mb-3">
                     <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                       {displayName[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{displayName}</p>
-                      <p className="text-xs text-violet-400">You · added automatically</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</p>
+                      <p className="text-xs text-violet-500 dark:text-violet-400">You · added automatically</p>
                     </div>
                   </div>
 
@@ -327,7 +322,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                             placeholder="Name"
                             value={member.name}
                             onChange={e => setMembers(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
-                            className="px-3 py-2.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-violet-500 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
+                            className="px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-violet-500 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
                           />
                           <input
                             type="email"
@@ -335,15 +330,15 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                             value={member.email}
                             onChange={e => setMembers(prev => prev.map((m, i) => i === idx ? { ...m, email: e.target.value } : m))}
                             className={cn(
-                              'px-3 py-2.5 rounded-xl bg-slate-800 border text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:border-violet-500 focus:ring-violet-500/50 transition-all',
-                              emailErrors[idx] ? 'border-red-500/70 focus:ring-red-500/30' : 'border-slate-700',
+                              'px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800 border text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:border-violet-500 focus:ring-violet-500/50 transition-all',
+                              emailErrors[idx] ? 'border-red-500/70 focus:ring-red-500/30' : 'border-gray-200 dark:border-slate-700',
                             )}
                           />
                         </div>
                         <button
                           type="button"
                           onClick={() => setMembers(prev => prev.filter((_, i) => i !== idx))}
-                          className="shrink-0 p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                          className="shrink-0 p-1.5 rounded-lg text-gray-400 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           aria-label="Remove member"
                         >
                           <X size={13} />
@@ -355,14 +350,14 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                   <button
                     type="button"
                     onClick={() => setMembers(prev => [...prev, { name: '', email: '' }])}
-                    className="flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 transition-colors mb-6 py-1"
+                    className="flex items-center gap-1.5 text-sm text-violet-500 dark:text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors mb-6 py-1"
                   >
                     <Plus size={13} />
                     Add person
                   </button>
 
                   {error && (
-                    <p className="text-xs text-red-400 mb-3 bg-red-900/20 border border-red-800/40 rounded-xl px-3 py-2">
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2">
                       {error}
                     </p>
                   )}
@@ -371,7 +366,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                     <button
                       onClick={() => go(1)}
                       disabled={loading}
-                      className="flex-1 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-sm font-medium transition-colors border border-slate-700/60"
+                      className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-40 text-gray-600 dark:text-slate-300 text-sm font-medium transition-colors border border-gray-200 dark:border-slate-700/60"
                     >
                       Back
                     </button>
@@ -400,7 +395,7 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
                   'rounded-full transition-all duration-300',
                   step === i  ? 'w-6 h-1.5 bg-violet-500'
                   : step > i  ? 'w-2 h-1.5 bg-violet-700'
-                  :              'w-2 h-1.5 bg-slate-700',
+                  :              'w-2 h-1.5 bg-gray-200 dark:bg-slate-700',
                 )}
               />
             ))}
