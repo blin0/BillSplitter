@@ -523,8 +523,8 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                         on sm+   → [Currency] | [Amount] | [Paid By] in one row */}
           <div className="flex flex-col sm:flex-row items-stretch overflow-hidden rounded-[inherit]">
 
-            {/* Currency + Amount sub-row (always together) */}
-            <div className="flex shrink-0 items-stretch">
+            {/* Currency + Amount sub-row — flex-[3_1_0%]: takes 60% of row, shrinks proportionally */}
+            <div className="flex flex-[3_1_0%] min-w-0 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
@@ -537,10 +537,10 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
             />
 
             {/* Vertical divider */}
-            <div className="w-px bg-gray-200 dark:bg-slate-700 self-stretch" />
+            <div className="w-px shrink-0 bg-gray-200 dark:bg-slate-700 self-stretch" />
 
             {/* Amount input with − / + nudge */}
-            <div className="flex items-stretch">
+            <div className="flex flex-1 min-w-0 items-stretch">
               <button
                 type="button"
                 onClick={() => nudge(-1)}
@@ -549,7 +549,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                 onMouseLeave={stopLongPress}
                 onTouchStart={() => startLongPress(-1)}
                 onTouchEnd={stopLongPress}
-                className="px-2.5 text-slate-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 hover:scale-110 active:scale-95 transition-all select-none"
+                className="px-2.5 shrink-0 text-slate-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 hover:scale-110 active:scale-95 transition-all select-none"
                 aria-label="Decrease amount"
               >
                 <MinusIcon size={13} />
@@ -564,7 +564,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-24 bg-transparent text-sm text-gray-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-center py-2 focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-center py-2 focus:outline-none"
               />
 
               <button
@@ -575,7 +575,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                 onMouseLeave={stopLongPress}
                 onTouchStart={() => startLongPress(1)}
                 onTouchEnd={stopLongPress}
-                className="px-2.5 text-slate-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 hover:scale-110 active:scale-95 transition-all select-none"
+                className="px-2.5 shrink-0 text-slate-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 hover:scale-110 active:scale-95 transition-all select-none"
                 aria-label="Increase amount"
               >
                 <PlusIcon size={13} />
@@ -583,17 +583,17 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
             </div>
             </div>{/* end Currency+Amount sub-row */}
 
-            {/* Responsive divider: horizontal on mobile, vertical on sm+ */}
-            <div className="sm:w-px h-px sm:h-auto bg-gray-200 dark:bg-slate-700 self-stretch" />
+            {/* Divider — shrink-0 so it never collapses */}
+            <div className="sm:w-px shrink-0 h-px sm:h-auto bg-gray-200 dark:bg-slate-700 self-stretch" />
 
-            {/* Paid By — full width on mobile, flex-1 on sm+ */}
+            {/* Paid By — flex-[2_1_0%]: takes 40% of row, shrinks at same rate as currency+amount */}
             <ParticipantSelect
               participants={participants}
               value={paidBy}
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-1 min-w-[8rem]"
+              className="flex-[2_1_0%] min-w-[5rem]"
               storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
