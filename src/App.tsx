@@ -458,6 +458,11 @@ function AppInner() {
     });
   }, [activeGroupId, linkedMemberId]);
 
+  async function handleSignOut() {
+    await signOut();
+    navigate('/');
+  }
+
   // ── Active state (whichever mode is live) ──────────────────────────────────
   const isSignedIn      = !!user;
   const participants    = isSignedIn ? dbParticipants : guestParticipants;
@@ -974,7 +979,7 @@ function AppInner() {
                     </span>
                   </button>
                   <button
-                    onClick={signOut}
+                    onClick={handleSignOut}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                   >
                     <LogOut size={15} />
