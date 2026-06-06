@@ -227,6 +227,10 @@ function AppInner() {
     try { localStorage.setItem('billsplitter_expenses', JSON.stringify(guestExpenses)); } catch { }
   }, [guestExpenses, user]);
 
+  useEffect(() => {
+    if (user) setShowSignIn(false);
+  }, [user]);
+
   // ── Signed-in state (Supabase) ─────────────────────────────────────────────
   const [groups,         setGroups        ] = useState<GroupInfo[]>([]);
   const [activeGroupId,  setActiveGroupId ] = useState<string | null>(null);
