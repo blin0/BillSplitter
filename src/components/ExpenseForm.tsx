@@ -523,8 +523,8 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                         on sm+   → [Currency] | [Amount] | [Paid By] in one row */}
           <div className="flex flex-col sm:flex-row items-stretch overflow-hidden rounded-[inherit]">
 
-            {/* Currency + Amount sub-row — flex-[11_1_0%]: ~55% of row */}
-            <div className="flex flex-[11_1_0%] min-w-0 items-stretch">
+            {/* Currency + Amount sub-row — flex-[13_1_0%]: ~65% of row */}
+            <div className="flex flex-[13_1_0%] min-w-0 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
@@ -593,7 +593,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-[9_1_0%] min-w-[3rem]"
+              className="flex-[7_1_0%] min-w-[3rem]"
               storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
