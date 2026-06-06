@@ -524,7 +524,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
           <div className="flex flex-col sm:flex-row items-stretch overflow-hidden rounded-[inherit]">
 
             {/* Currency + Amount sub-row (always together) */}
-            <div className="flex flex-1 min-w-0 items-stretch">
+            <div className="flex shrink-0 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
@@ -540,7 +540,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
             <div className="w-px bg-gray-200 dark:bg-slate-700 self-stretch" />
 
             {/* Amount input with − / + nudge */}
-            <div className="flex flex-1 items-stretch">
+            <div className="flex items-stretch">
               <button
                 type="button"
                 onClick={() => nudge(-1)}
@@ -564,7 +564,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-center py-2 focus:outline-none"
+                className="w-24 bg-transparent text-sm text-gray-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-center py-2 focus:outline-none"
               />
 
               <button
