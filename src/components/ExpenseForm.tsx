@@ -532,7 +532,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setSourceCurrency}
               onOpenChange={setCurrencyOpen}
               embedded
-              className="shrink w-[6.5rem] min-w-[3rem]"
+              className="shrink w-[6.5rem] min-w-[2.5rem]"
               listMaxHeight="max-h-56"
             />
 
@@ -540,7 +540,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
             <div className="w-px shrink-0 bg-gray-200 dark:bg-slate-700 self-stretch" />
 
             {/* Amount input with − / + nudge */}
-            <div className="flex flex-1 min-w-[3.5rem] items-stretch">
+            <div className="flex flex-1 min-w-[4.5rem] items-stretch">
               <button
                 type="button"
                 onClick={() => nudge(-1)}
@@ -593,7 +593,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-[9_1_0%] min-w-[4rem]"
+              className="flex-[9_1_0%] min-w-[3rem]"
               storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
