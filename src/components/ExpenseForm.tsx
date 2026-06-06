@@ -532,7 +532,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setSourceCurrency}
               onOpenChange={setCurrencyOpen}
               embedded
-              className="shrink w-[6.5rem] min-w-[4rem]"
+              className="shrink w-[6.5rem] min-w-[3rem]"
               listMaxHeight="max-h-56"
             />
 
@@ -593,7 +593,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-[9_1_0%] min-w-[5rem]"
+              className="flex-[9_1_0%] min-w-[4rem]"
               storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
