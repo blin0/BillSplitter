@@ -523,8 +523,8 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
                         on sm+   → [Currency] | [Amount] | [Paid By] in one row */}
           <div className="flex flex-col sm:flex-row items-stretch overflow-hidden rounded-[inherit]">
 
-            {/* Currency + Amount sub-row — flex-[3_1_0%]: takes 60% of row, shrinks proportionally */}
-            <div className="flex flex-[3_1_0%] min-w-0 items-stretch">
+            {/* Currency + Amount sub-row — flex-[11_1_0%]: ~55% of row */}
+            <div className="flex flex-[11_1_0%] min-w-0 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
@@ -532,7 +532,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setSourceCurrency}
               onOpenChange={setCurrencyOpen}
               embedded
-              className="shrink-0 w-[6.5rem]"
+              className="shrink w-[6.5rem] min-w-[4rem]"
               listMaxHeight="max-h-56"
             />
 
@@ -540,7 +540,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
             <div className="w-px shrink-0 bg-gray-200 dark:bg-slate-700 self-stretch" />
 
             {/* Amount input with − / + nudge */}
-            <div className="flex flex-1 min-w-0 items-stretch">
+            <div className="flex flex-1 min-w-[3.5rem] items-stretch">
               <button
                 type="button"
                 onClick={() => nudge(-1)}
@@ -593,7 +593,7 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
               onChange={setPaidBy}
               onOpenChange={setPaidByOpen}
               embedded
-              className="flex-[2_1_0%] min-w-[5rem]"
+              className="flex-[9_1_0%] min-w-[5rem]"
               storageKey={user?.id && groupId ? `${user.id}_${groupId}` : undefined}
             />
           </div>{/* end top row */}
