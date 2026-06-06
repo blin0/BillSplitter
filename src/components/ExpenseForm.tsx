@@ -521,10 +521,10 @@ export default function ExpenseForm({ participants, onAdd, initialExpense, onSav
         >
           {/* Top row: on mobile → [Currency | Amount] stacked above [Paid By]
                         on sm+   → [Currency] | [Amount] | [Paid By] in one row */}
-          <div className="flex flex-col sm:flex-row items-stretch">
+          <div className="flex flex-col sm:flex-row items-stretch overflow-hidden rounded-[inherit]">
 
             {/* Currency + Amount sub-row (always together) */}
-            <div className="flex flex-1 items-stretch">
+            <div className="flex flex-1 min-w-0 items-stretch">
             {/* Currency — embedded; panel anchors to this container */}
             <CurrencySelect
               options={EXPENSE_CURRENCIES}
