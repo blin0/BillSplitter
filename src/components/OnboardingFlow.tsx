@@ -2,7 +2,8 @@ import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, ArrowRight, Plus, X, Loader2, ChevronRight, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { createGroup, insertParticipant, updateGroupIcon, type GroupInfo } from '../lib/db';
+import { createGroup, insertParticipant, updateGroupIcon, createGroupInvite, type GroupInfo } from '../lib/db';
+import { supabase } from '../lib/supabase';
 import { GROUP_ICON_DEFS } from '../lib/groupIcons';
 import { cn } from '../lib/cn';
 
@@ -113,7 +114,31 @@ export default function OnboardingFlow({ onSkip, onComplete, initialStep = 0 }: 
     await insertParticipant(group.id, displayName);
 
     const validMembers = members.filter(m => m.name.trim());
-    await Promise.all(validMembers.map(m => insertParticipant(group.id, m.name.trim())));
+    const insertedParticipants = await Promise.all(
+      validMembers.map(m => insertParticipant(group.id, m.name.trim()))
+    );
+
+    // Create invite tokens + fire emails for members with addresses
+    const allMemberNames = [displayName, ...validMembers.map(m => m.name.trim())];
+    for (let i = 0; i < validMembers.length; i++) {
+      const member      = validMembers[i];
+      const participant = insertedParticipants[i];
+      if (!member.email.trim() || !participant.data?.id) continue;
+
+      const { data: token } = await createGroupInvite(group.id, participant.data.id, member.email.trim());
+
+      supabase.functions.invoke('send-group-invite', {
+        body: {
+          memberName:  member.name.trim(),
+          memberEmail: member.email.trim(),
+          groupName:   groupName.trim(),
+          inviterName: displayName,
+          allMembers:  allMemberNames,
+          inviteToken: token ?? null,
+          joinCode:    group.joinCode,
+        },
+      }).catch(() => { /* email failure is non-fatal */ });
+    }
 
     setLoading(false);
     onComplete({ ...group, icon: selectedIcon });

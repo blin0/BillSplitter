@@ -43,6 +43,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProtectedRoute from './components/ProtectedRoute';
 import ResetPassword from './pages/ResetPassword';
 import LoginPage from './pages/LoginPage';
+import JoinGroup from './pages/JoinGroup';
 import { useGroupSync } from './hooks/useGroupSync';
 import {
   fetchUserGroups,
@@ -285,6 +286,12 @@ function AppInner() {
       setDbParticipants([]);
       setDbExpenses([]);
       return;
+    }
+
+    // If user confirmed email and landed somewhere other than /join, redirect to finish the invite
+    const pendingInvite = localStorage.getItem('axiom_pending_invite_token');
+    if (pendingInvite && !location.pathname.startsWith('/join')) {
+      navigate(`/join?token=${pendingInvite}`);
     }
 
     let cancelled = false;
@@ -1029,6 +1036,11 @@ function AppInner() {
             <ProtectedRoute>
               <Analytics groups={groups} currentUserId={user?.id ?? null} />
             </ProtectedRoute>
+          } />
+
+          {/* Group invite acceptance */}
+          <Route path="/join" element={
+            <JoinGroup onShowSignIn={() => setShowSignIn(true)} />
           } />
 
           {/* Developer feedback dashboard */}
