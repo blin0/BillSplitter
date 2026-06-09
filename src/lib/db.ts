@@ -1189,6 +1189,67 @@ export async function fetchPersonalCalendarMonth(year: number, month: number): P
   return { data: results, error: null };
 }
 
+// ─── Group Invites ────────────────────────────────────────────────────────────
+
+export interface GroupInviteInfo {
+  groupId:         string;
+  groupName:       string;
+  participantId:   string;
+  participantName: string;
+  email:           string;
+  expiresAt:       string;
+}
+
+export async function createGroupInvite(
+  groupId:       string,
+  participantId: string,
+  email:         string,
+): Promise<DbResult<string>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from('group_invites')
+    .insert({ group_id: groupId, participant_id: participantId, email })
+    .select('token')
+    .single();
+
+  if (error) return { data: null, error: error.message };
+  return { data: (data as { token: string }).token, error: null };
+}
+
+export async function fetchGroupInvite(token: string): Promise<DbResult<GroupInviteInfo>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from('group_invites')
+    .select('group_id, participant_id, email, expires_at, accepted_at, groups(name), named_participants(name)')
+    .eq('token', token)
+    .single();
+
+  if (error) return { data: null, error: error.message };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as any;
+  if (row.accepted_at) return { data: null, error: 'Invite already accepted' };
+
+  return {
+    data: {
+      groupId:         row.group_id,
+      groupName:       row.groups?.name ?? 'Unknown Group',
+      participantId:   row.participant_id,
+      participantName: row.named_participants?.name ?? 'Unknown',
+      email:           row.email,
+      expiresAt:       row.expires_at,
+    },
+    error: null,
+  };
+}
+
+export async function acceptGroupInvite(token: string): Promise<DbResult<{ groupId: string }>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('accept_group_invite', { invite_token: token });
+  if (error) return { data: null, error: error.message };
+  if (data?.error) return { data: null, error: data.error };
+  return { data: { groupId: data.group_id }, error: null };
+}
+
 // ─── Feedback ─────────────────────────────────────────────────────────────────
 
 export interface FeedbackPayload {
